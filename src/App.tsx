@@ -484,16 +484,6 @@ function FundManager({ session }: { session: Session }) {
             <button className="muted">
               {today.split("-").reverse().join("-")}
             </button>
-            {role !== "VIEWER" &&
-              page !== "Collections" &&
-              page !== "Expenses" && (
-              <button
-                className="primary"
-                onClick={() => setModal("collection")}
-              >
-                + Collect Fund
-              </button>
-            )}
           </div>
         </header>
         {page === "Dashboard" && (
