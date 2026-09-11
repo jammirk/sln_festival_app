@@ -1,0 +1,135 @@
+.flatLayout {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+.floorMenu {
+  border: 1px solid #e3eae5;
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px;
+  display: grid;
+  gap: 4px;
+}
+.floorMenu > small {
+  color: #829087;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  padding: 6px 8px;
+}
+.floorMenu button {
+  border: 0;
+  background: transparent;
+  border-radius: 6px;
+  color: #48645a;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 8px;
+  text-align: left;
+}
+.floorMenu button:hover,
+.floorMenu .selectedFloor {
+  background: #f7e4de;
+  color: #7b2d26;
+}
+.floorMenu button span {
+  color: #84938a;
+  font-size: 11px;
+}
+.floorTitle {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 9px 2px;
+}
+.floorTitle h3 {
+  color: #7b2d26;
+  font-size: 17px;
+  margin: 0;
+}
+.floorTitle span {
+  color: #718078;
+  font-size: 12px;
+  margin-left: 8px;
+}
+.floorTitle > b {
+  color: #718078;
+  font-size: 12px;
+  font-weight: 500;
+}
+@media (max-width: 720px) {
+  .flatLayout {
+    grid-template-columns: 1fr;
+  }
+  .floorMenu {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .floorMenu > small {
+    grid-column: 1 / -1;
+  }
+}
+.inlineCell {
+  border: 0;
+  background: transparent;
+  color: #26352f;
+  cursor: text;
+  font: inherit;
+  min-height: 26px;
+  padding: 3px 2px;
+  text-align: left;
+  width: 100%;
+}
+.inlineCell:hover {
+  background: #f9eeea;
+  border-radius: 4px;
+}
+.inlineCell.empty {
+  color: #8a9891;
+  font-style: italic;
+}
+.inlineInput {
+  border: 1px solid #a64032;
+  border-radius: 4px;
+  font: inherit;
+  min-width: 115px;
+  outline: none;
+  padding: 5px 7px;
+  width: 100%;
+}
+.exportCard {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #e3eae5;
+  border-radius: 10px;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  margin-top: 20px;
+  padding: 20px;
+}
+.exportCard h2 {
+  margin-bottom: 6px;
+}
+.exportCard p {
+  color: #718078;
+  font-size: 12px;
+  max-width: 540px;
+}
+.associationTitle {
+  color: #7b2d26;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  margin: 0 0 22px;
+  text-align: center;
+}
+@media (max-width: 720px) {
+  .exportCard {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
