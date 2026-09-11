@@ -566,7 +566,6 @@ function FundManager({ session }: { session: Session }) {
                   headers={[
                     "Flat Number",
                     "Resident",
-                    "Phone No.",
                     "Total Collected",
                     "Outstanding",
                     "Payment Status",
@@ -576,7 +575,7 @@ function FundManager({ session }: { session: Session }) {
                     {flats
                       .filter((f) => floorOf(f.number) === selectedFloor)
                       .filter((f) =>
-                        (displayFlatNumber(f.number) + f.resident + f.phone)
+                        (displayFlatNumber(f.number) + f.resident)
                           .toLowerCase()
                           .includes(search.toLowerCase()),
                       )
@@ -587,9 +586,7 @@ function FundManager({ session }: { session: Session }) {
                             cellEdit.field === "flat_number",
                           isResident =
                             cellEdit?.id === f.id &&
-                            cellEdit.field === "resident_name",
-                          isPhone =
-                            cellEdit?.id === f.id && cellEdit.field === "phone";
+                            cellEdit.field === "resident_name";
                         return (
                           <tr key={f.id}>
                             <td>
@@ -630,26 +627,6 @@ function FundManager({ session }: { session: Session }) {
                                       f.resident === "Resident not added"
                                         ? ""
                                         : f.resident,
-                                  })
-                                }
-                                onChange={(value: string) =>
-                                  setCellEdit((x) => (x ? { ...x, value } : x))
-                                }
-                                onSave={saveCell}
-                                onCancel={() => setCellEdit(null)}
-                              />
-                            </td>
-                            <td>
-                              <InlineCell
-                                editable={role === "ADMIN"}
-                                value={isPhone ? (cellEdit?.value ?? '') : f.phone}
-                                placeholder="Add phone number"
-                                active={isPhone}
-                                onStart={() =>
-                                  setCellEdit({
-                                    id: f.id,
-                                    field: "phone",
-                                    value: f.phone,
                                   })
                                 }
                                 onChange={(value: string) =>
