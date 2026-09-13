@@ -486,6 +486,9 @@ th {
   font-size: 11px;
   color: #74867d;
 }
+.receiptPrintCopy {
+  display: none;
+}
 .login {
   min-height: 100vh;
   display: grid;
@@ -694,7 +697,8 @@ th {
 }
 @media print {
   @page {
-    margin: 10mm;
+    size: A4 portrait;
+    margin: 8mm;
   }
   body {
     background: #fff;
@@ -729,5 +733,42 @@ th {
   }
   .receipt {
     border: 0;
+    break-inside: avoid;
+    height: 136mm;
+    overflow: hidden;
+    padding: 5mm;
+  }
+  .receiptPrintCopy {
+    display: block;
+  }
+  .ganeshaLogo {
+    height: 32px;
+    width: 32px;
+  }
+  .receiptbrand b {
+    font-size: 11px;
+    margin-top: 2px;
+  }
+  .receipt h3 {
+    font-size: 12px;
+    margin: 8px 0;
+    padding: 6px;
+  }
+  .receiptline {
+    font-size: 11px;
+  }
+  .line {
+    padding: 6px 0;
+  }
+  .amount {
+    margin: 8px 0;
+    padding: 8px;
+  }
+  .amount b {
+    font-size: 22px;
+    margin: 3px;
+  }
+  .thanks {
+    margin: 10px 0 6px;
   }
 }

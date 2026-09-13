@@ -393,6 +393,10 @@ function FundManager({ session }: { session: Session }) {
       return alert(
         `An active ${donationType} entry already exists for flat ${displayFlatNumber(flat)}.`,
       );
+    if (dbError?.message.includes("donation_type"))
+      return alert(
+        "Donation Type setup is pending. Apply the latest Supabase migration, then try again.",
+      );
     if (dbError || !data)
       return alert("Donation could not be saved. Please try again.");
     const c: Collection = {
@@ -1254,7 +1258,12 @@ function Modal({ title, close, children }: any) {
 function CollectionForm({ flats, close, save, saving }: any) {
   return (
     <Modal title="Add festival donation" close={close}>
-      <form action={save}>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void save(new FormData(event.currentTarget));
+        }}
+      >
         <label>
           Flat
           <select name="flat" required>
@@ -1323,7 +1332,12 @@ function CollectionForm({ flats, close, save, saving }: any) {
 function ExpenseForm({ close, save, categories, saving }: any) {
   return (
     <Modal title="Add festival expense" close={close}>
-      <form action={save}>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void save(new FormData(event.currentTarget));
+        }}
+      >
         <div className="formgrid">
           <label>
             Date
@@ -1486,7 +1500,24 @@ function InlineCell({
 function Receipt({ c, close }: any) {
   return (
     <Modal title="Donation receipt" close={close}>
-      <div className="receipt">
+      <ReceiptContent c={c} />
+      <div className="receiptPrintCopy">
+        <ReceiptContent c={c} />
+      </div>
+      <div className="actions noPrint">
+        <button className="muted" onClick={close}>
+          Close
+        </button>
+        <button className="primary" onClick={() => print()}>
+          Print receipt
+        </button>
+      </div>
+    </Modal>
+  );
+}
+function ReceiptContent({ c }: { c: Collection }) {
+  return (
+    <div className="receipt">
         <div className="receiptbrand">
           <svg
             className="ganeshaLogo"
@@ -1530,16 +1561,7 @@ function Receipt({ c, close }: any) {
         {c.notes && <Line a="Notes" b={c.notes} />}
         <p className="thanks">Thank You for Your Contribution</p>
         <footer>Ganesh Festival Committee</footer>
-      </div>
-      <div className="actions noPrint">
-        <button className="muted" onClick={close}>
-          Close
-        </button>
-        <button className="primary" onClick={() => print()}>
-          Print receipt
-        </button>
-      </div>
-    </Modal>
+    </div>
   );
 }
 function Login() {
