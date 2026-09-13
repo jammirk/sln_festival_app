@@ -57,7 +57,7 @@ create policy "read categories" on public.expense_categories for select to authe
 create policy "read collections" on public.fund_collections for select to authenticated using(true); create policy "collectors insert collections" on public.fund_collections for insert to authenticated with check(public.has_role('ADMIN') or public.has_role('COLLECTOR')); create policy "admins void collections" on public.fund_collections for update to authenticated using(public.has_role('ADMIN')) with check(public.has_role('ADMIN'));
 create policy "read expenses" on public.expenses for select to authenticated using(true); create policy "admins manage expenses" on public.expenses for all to authenticated using(public.has_role('ADMIN')) with check(public.has_role('ADMIN'));
 insert into public.festivals(name,year,start_date,end_date,opening_balance,expected_contribution,status) values ('Ganesh Festival 2026',2026,'2026-09-07','2026-09-17',0,1000,'ACTIVE');
-insert into public.expense_categories(festival_id,name) select id,category from public.festivals cross join unnest(array['Decoration','Ganesh Idol','Pooja Materials','Flowers','Food','Sound System','Cultural Program','Electricity','Cleaning','Prasadam','Miscellaneous']) category;
+insert into public.expense_categories(festival_id,name) select id,category from public.festivals cross join unnest(array['Decoration','Ganesh Idol','Pooja Materials','Flowers','Food','Sound System','Cultural Program','Electricity','Cleaning','Prasadam','Groceries','Cook','Sweets','Pujari','Miscellaneous']) category;
 insert into public.flats(flat_number,resident_name,expected_contribution)
 select flat_number, null, 1000 from (
   select (100 + unit)::text as flat_number from generate_series(1,14) unit where unit <> 12

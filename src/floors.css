@@ -61,7 +61,7 @@
   font-size: 12px;
   font-weight: 500;
 }
-@media (max-width: 720px) {
+@media (max-width: 1100px) {
   .flatLayout {
     grid-template-columns: 1fr;
   }
@@ -127,7 +127,7 @@
   margin: 0 0 22px;
   text-align: center;
 }
-@media (max-width: 720px) {
+@media (max-width: 1100px) {
   .exportCard {
     align-items: stretch;
     flex-direction: column;

@@ -19,6 +19,7 @@ type Collection = {
   resident: string;
   amount: number;
   date: string;
+  donationType: string;
   mode: string;
   status: "ACTIVE" | "VOIDED";
   notes?: string;
@@ -34,6 +35,8 @@ type Expense = {
   mode: string;
   status: "ACTIVE" | "VOIDED";
 };
+type SortState = { key: string; direction: "asc" | "desc" };
+type TableHeader = { label: string; sortKey?: string };
 const money = (n: number) =>
   new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -41,7 +44,38 @@ const money = (n: number) =>
     maximumFractionDigits: 0,
   }).format(n);
 const date = (d: string) => d.split("-").reverse().join("-");
+const searchRow = (row: Record<string, unknown>, query: string) => {
+  const term = query.trim().toLowerCase();
+  if (!term) return true;
+  return [
+    ...Object.values(row),
+    "date" in row && typeof row.date === "string" ? date(row.date) : "",
+    "amount" in row && typeof row.amount === "number" ? money(row.amount) : "",
+  ]
+    .join(" ")
+    .toLowerCase()
+    .includes(term);
+};
+const sortRows = <T extends Record<string, unknown>>(
+  rows: T[],
+  sort: SortState | null,
+) => {
+  if (!sort) return rows;
+  return [...rows].sort((a, b) => {
+    const left = a[sort.key];
+    const right = b[sort.key];
+    const result =
+      typeof left === "number" && typeof right === "number"
+        ? left - right
+        : String(left ?? "").localeCompare(String(right ?? ""), undefined, {
+            numeric: true,
+            sensitivity: "base",
+          });
+    return sort.direction === "asc" ? result : -result;
+  });
+};
 const today = "2026-09-11";
+const donationTypes = ["Donation", "Annaprasadam", "Pooja", "Homam"];
 const cats = [
   "Decoration",
   "Ganesh Idol",
@@ -53,6 +87,10 @@ const cats = [
   "Electricity",
   "Cleaning",
   "Prasadam",
+  "Groceries",
+  "Cook",
+  "Sweets",
+  "Pujari",
   "Miscellaneous",
 ];
 
@@ -81,6 +119,10 @@ function FundManager({ session }: { session: Session }) {
   const [page, setPage] = useState("Dashboard"),
     [opening, setOpening] = useState(0),
     [search, setSearch] = useState(""),
+    [collectionSearch, setCollectionSearch] = useState(""),
+    [expenseSearch, setExpenseSearch] = useState(""),
+    [collectionSort, setCollectionSort] = useState<SortState | null>(null),
+    [expenseSort, setExpenseSort] = useState<SortState | null>(null),
     [selectedFloor, setSelectedFloor] = useState(1),
     [modal, setModal] = useState(""),
     [receipt, setReceipt] = useState<Collection | null>(null),
@@ -164,6 +206,7 @@ function FundManager({ session }: { session: Session }) {
           resident: x.flats?.resident_name || "Resident not added",
           amount: Number(x.amount),
           date: x.payment_date,
+          donationType: x.donation_type || "Donation",
           mode: x.payment_mode,
           status: x.status,
           notes: x.notes,
@@ -203,6 +246,26 @@ function FundManager({ session }: { session: Session }) {
       .filter((x) => x.status === "ACTIVE")
       .reduce((s, x) => s + x.amount, 0),
     balance = opening + income - expense;
+  const visibleCollections = sortRows(
+    collections
+      .filter((collection) => collection.status === "ACTIVE")
+      .filter((collection) => searchRow(collection, collectionSearch)),
+    collectionSort,
+  );
+  const visibleExpenses = sortRows(
+    expenses.filter((item) => searchRow(item, expenseSearch)),
+    expenseSort,
+  );
+  const toggleSort = (
+    setSort: React.Dispatch<React.SetStateAction<SortState | null>>,
+    key: string,
+  ) => {
+    setSort((current) =>
+      current?.key === key
+        ? { key, direction: current.direction === "asc" ? "desc" : "asc" }
+        : { key, direction: "asc" },
+    );
+  };
   const flatStatus = (n: string) => {
     const amount = collections
         .filter((c) => c.status === "ACTIVE" && c.flat === n)
@@ -241,6 +304,7 @@ function FundManager({ session }: { session: Session }) {
       Date: date(item.date),
       "Flat No.": displayFlatNumber(item.flat),
       "Resident Name": item.resident,
+      "Donation Type": item.donationType,
       Amount: item.amount,
       "Payment Mode": item.mode,
       Status: item.status,
@@ -261,7 +325,7 @@ function FundManager({ session }: { session: Session }) {
       { Item: "Year", Value: festival?.year || "" },
       { Item: "Generated on", Value: date(today) },
       { Item: "Opening Balance", Value: opening },
-      { Item: "Total Funds Collected", Value: income },
+      { Item: "Total Donations Received", Value: income },
       { Item: "Total Expenditure", Value: expense },
       { Item: "Current Balance", Value: balance },
       { Item: "Total Flats", Value: flats.length },
@@ -276,7 +340,7 @@ function FundManager({ session }: { session: Session }) {
       sheet["!cols"] = Object.keys(data[0] || {}).map((heading) => ({ wch: Math.max(14, heading.length + 2) }));
       XLSX.utils.book_append_sheet(workbook, sheet, name);
     };
-    addSheet("Funds Collections", collectionsSheet);
+    addSheet("Donations", collectionsSheet);
     addSheet("Daily Expenditure", expensesSheet);
     addSheet("Summary", summarySheet);
     XLSX.writeFile(workbook, `ganesh-festival-${festival?.year || "report"}-export.xlsx`);
@@ -284,12 +348,15 @@ function FundManager({ session }: { session: Session }) {
   const saveCollection = async (fd: FormData) => {
     let flat = String(fd.get("flat")),
       amount = Number(fd.get("amount")),
+      donationType = String(fd.get("donationType")),
       f = flats.find((x) => x.number === flat);
     if (!festival || festival.status === "CLOSED")
-      return alert("This festival is closed to new collections.");
+      return alert("This festival is closed to new donations.");
     if (!f || !amount || amount < 1)
       return alert("Select a flat and enter an amount greater than zero.");
-    if (saving || !confirm("Create this collection and receipt?")) return;
+    if (!donationTypes.includes(donationType))
+      return alert("Select a donation type.");
+    if (saving || !confirm("Create this donation and receipt?")) return;
     setSaving(true);
     const { data, error: dbError } = await supabase
       .from("fund_collections")
@@ -297,6 +364,7 @@ function FundManager({ session }: { session: Session }) {
         festival_id: festival.id,
         flat_id: f.id,
         amount,
+        donation_type: donationType,
         payment_date: String(fd.get("date")),
         payment_mode: String(fd.get("mode")),
         notes: String(fd.get("notes")) || null,
@@ -306,7 +374,7 @@ function FundManager({ session }: { session: Session }) {
       .single();
     setSaving(false);
     if (dbError || !data)
-      return alert("Collection could not be saved. Please try again.");
+      return alert("Donation could not be saved. Please try again.");
     const c: Collection = {
       id: data.id,
       receipt: data.receipt_number,
@@ -314,6 +382,7 @@ function FundManager({ session }: { session: Session }) {
       resident: data.flats?.resident_name || f.resident,
       amount: Number(data.amount),
       date: data.payment_date,
+      donationType: data.donation_type || donationType,
       mode: data.payment_mode,
       status: data.status,
       notes: data.notes,
@@ -418,7 +487,7 @@ function FundManager({ session }: { session: Session }) {
   const nav = [
     "Dashboard",
     "Flats",
-    "Collections",
+    "Donations",
     "Expenses",
     "Reports",
     "Settings",
@@ -642,29 +711,36 @@ function FundManager({ session }: { session: Session }) {
             </div>
           </section>
         )}
-        {page === "Collections" && (
+        {page === "Donations" && (
           <section>
             <Top
-              title="Collection history"
-              description="Voided records remain visible for a complete audit trail."
-              action={role !== "VIEWER" ? "+ Collect Fund" : ""}
+              title="Donation history"
+              description="View every active donation received for the festival."
+              action={role !== "VIEWER" ? "+ Add Donation" : ""}
               onClick={() => setModal("collection")}
             />
-            <Filters />
+            <Filters
+              value={collectionSearch}
+              onChange={setCollectionSearch}
+              placeholder="Search donations"
+            />
             <Table
               headers={[
-                "Receipt No.",
-                "Date",
-                "Flat",
-                "Resident",
-                "Amount",
-                "Mode",
-                "Status",
-                "Actions",
+                { label: "Receipt No.", sortKey: "receipt" },
+                { label: "Date", sortKey: "date" },
+                { label: "Flat", sortKey: "flat" },
+                { label: "Resident", sortKey: "resident" },
+                { label: "Donation Type", sortKey: "donationType" },
+                { label: "Amount", sortKey: "amount" },
+                { label: "Mode", sortKey: "mode" },
+                { label: "Status", sortKey: "status" },
+                { label: "Actions" },
               ]}
+              sort={collectionSort}
+              onSort={(key) => toggleSort(setCollectionSort, key)}
             >
               <>
-                {collections.map((c) => (
+                {visibleCollections.map((c) => (
                   <tr key={c.id}>
                     <td>
                       <b>{c.receipt}</b>
@@ -672,6 +748,7 @@ function FundManager({ session }: { session: Session }) {
                     <td>{date(c.date)}</td>
                     <td>{c.flat}</td>
                     <td>{c.resident}</td>
+                    <td>{c.donationType}</td>
                     <td>{money(c.amount)}</td>
                     <td>{c.mode}</td>
                     <td>
@@ -710,22 +787,28 @@ function FundManager({ session }: { session: Session }) {
               action={role === "ADMIN" ? "+ Add Expense" : ""}
               onClick={() => setModal("expense")}
             />
-            <Filters />
+            <Filters
+              value={expenseSearch}
+              onChange={setExpenseSearch}
+              placeholder="Search expenses"
+            />
             <Table
               headers={[
-                "Expense No.",
-                "Date",
-                "Category",
-                "Description",
-                "Paid To",
-                "Amount",
-                "Mode",
-                "Status",
-                "Actions",
+                { label: "Expense No.", sortKey: "number" },
+                { label: "Date", sortKey: "date" },
+                { label: "Category", sortKey: "category" },
+                { label: "Description", sortKey: "description" },
+                { label: "Paid To", sortKey: "paidTo" },
+                { label: "Amount", sortKey: "amount" },
+                { label: "Mode", sortKey: "mode" },
+                { label: "Status", sortKey: "status" },
+                { label: "Actions" },
               ]}
+              sort={expenseSort}
+              onSort={(key) => toggleSort(setExpenseSort, key)}
             >
               <>
-                {expenses.map((e) => (
+                {visibleExpenses.map((e) => (
                   <tr key={e.id}>
                     <td>
                       <b>{e.number}</b>
@@ -790,7 +873,7 @@ function FundManager({ session }: { session: Session }) {
               <div>
                 <h2>Export financial records</h2>
                 <p>
-                  Download an Excel workbook with Funds Collections, Daily
+                  Download an Excel workbook with Donations, Daily
                   Expenditure, and Summary worksheets.
                 </p>
               </div>
@@ -848,7 +931,7 @@ function Dashboard(p: any) {
     <section>
       <div className="cards">
         <Card t="Opening balance" v={money(p.opening)} />
-        <Card t="Funds collected" v={money(p.income)} />
+        <Card t="Donations received" v={money(p.income)} />
         <Card t="Total expenditure" v={money(p.expense)} />
         <Card t="Current balance" v={money(p.balance)} green />
       </div>
@@ -856,7 +939,7 @@ function Dashboard(p: any) {
         <article className="panel">
           <div className="row">
             <div>
-              <h2>Collection progress</h2>
+              <h2>Donation progress</h2>
               <p>Expected ₹1,03,000</p>
             </div>
             <b className="orange">{Math.round(p.income / 1030)}%</b>
@@ -880,7 +963,7 @@ function Dashboard(p: any) {
           <h2>Quick actions</h2>
           {p.role !== "VIEWER" && (
             <button onClick={() => p.setModal("collection")}>
-              + Collect festival fund
+              + Add festival donation
             </button>
           )}
           {p.role === "ADMIN" && (
@@ -894,7 +977,7 @@ function Dashboard(p: any) {
         </article>
       </div>
       <div className="grid">
-        <Recent title="Recent collections" items={p.collections} />
+        <Recent title="Recent donations" items={p.collections} />
         <Recent title="Recent expenses" items={p.expenses} />
       </div>
     </section>
@@ -933,32 +1016,73 @@ function Top({ title, description, action, onClick }: any) {
     </div>
   );
 }
-function Filters() {
+function Filters({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
   return (
     <div className="filters">
-      <input placeholder="Search transactions" />
-      <select>
-        <option>All payment modes</option>
-        <option>UPI</option>
-        <option>CASH</option>
-      </select>
-      <select>
-        <option>All statuses</option>
-        <option>ACTIVE</option>
-        <option>VOIDED</option>
-      </select>
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        aria-label={placeholder}
+      />
     </div>
   );
 }
-function Table({ headers, children }: { headers: string[]; children: any }) {
+function Table({
+  headers,
+  children,
+  sort,
+  onSort,
+}: {
+  headers: (string | TableHeader)[];
+  children: any;
+  sort?: SortState | null;
+  onSort?: (key: string) => void;
+}) {
   return (
     <div className="table">
       <table>
         <thead>
           <tr>
-            {headers.map((x) => (
-              <th key={x}>{x}</th>
-            ))}
+            {headers.map((header) => {
+              const item =
+                typeof header === "string" ? { label: header } : header;
+              const direction =
+                sort?.key === item.sortKey
+                  ? sort?.direction === "asc"
+                    ? "ascending"
+                    : "descending"
+                  : undefined;
+              return (
+                <th key={item.label} aria-sort={direction}>
+                  {item.sortKey && onSort ? (
+                    <button
+                      className="sortButton"
+                      onClick={() => onSort(item.sortKey!)}
+                    >
+                      {item.label}
+                      <span aria-hidden="true">
+                        {direction === "ascending"
+                          ? " ▲"
+                          : direction === "descending"
+                            ? " ▼"
+                            : " ↕"}
+                      </span>
+                    </button>
+                  ) : (
+                    item.label
+                  )}
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>{children}</tbody>
@@ -1016,9 +1140,9 @@ function Reports(p: any) {
       </div>
       <div className="grid">
         <article className="panel">
-          <h2>Collection report</h2>
-          <Line a="Expected collection" b="₹1,03,000" />
-          <Line a="Outstanding collection" b={money(103000 - p.income)} />
+          <h2>Donation report</h2>
+          <Line a="Expected donations" b="₹1,03,000" />
+          <Line a="Outstanding donations" b={money(103000 - p.income)} />
           <Line
             a="Paid / Partial / Pending"
             b={`${p.counts.PAID} / ${p.counts.PARTIAL} / ${p.counts.PENDING}`}
@@ -1109,7 +1233,7 @@ function Modal({ title, close, children }: any) {
 }
 function CollectionForm({ flats, close, save, saving }: any) {
   return (
-    <Modal title="Collect festival fund" close={close}>
+    <Modal title="Add festival donation" close={close}>
       <form action={save}>
         <label>
           Flat
@@ -1118,6 +1242,16 @@ function CollectionForm({ flats, close, save, saving }: any) {
             {flats.map((f: any) => (
               <option value={f.number} key={f.id}>
                 {f.number} · {f.resident}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Donation type
+          <select name="donationType" defaultValue="Donation" required>
+            {donationTypes.map((type) => (
+              <option value={type} key={type}>
+                {type}
               </option>
             ))}
           </select>
@@ -1325,13 +1459,27 @@ function InlineCell({
 }
 function Receipt({ c, close }: any) {
   return (
-    <Modal title="Collection receipt" close={close}>
+    <Modal title="Donation receipt" close={close}>
       <div className="receipt">
         <div className="receiptbrand">
-          ॐ<small>GANESH FESTIVAL</small>
-          <b>Ganesh Festival 2026</b>
+          <svg
+            className="ganeshaLogo"
+            viewBox="0 0 64 64"
+            role="img"
+            aria-label="Ganesha"
+          >
+            <path d="M32 8 38 16 32 20 26 16Z" />
+            <path d="M27 22c-7-5-14-1-14 7 0 7 5 11 12 9" />
+            <path d="M37 22c7-5 14-1 14 7 0 7-5 11-12 9" />
+            <path d="M25 24c2-5 12-5 14 0 3 7-1 11-7 11s-10-4-7-11Z" />
+            <path d="M32 30v17c0 5-4 8-8 5-2-2-1-6 2-6" />
+            <path d="M28 39c2 2 6 2 8 0" />
+            <circle cx="28" cy="28" r="1.2" fill="currentColor" />
+            <circle cx="36" cy="28" r="1.2" fill="currentColor" />
+          </svg>
+          <b>SLN GANESH FESTIVAL 2026</b>
         </div>
-        <h3>FUND COLLECTION RECEIPT</h3>
+        <h3>DONATION RECEIPT</h3>
         <div className="receiptline">
           <span>
             Receipt no.<b>{c.receipt}</b>
@@ -1342,6 +1490,7 @@ function Receipt({ c, close }: any) {
         </div>
         <Line a="Flat number" b={c.flat} />
         <Line a="Resident" b={c.resident} />
+        <Line a="Donation type" b={c.donationType} />
         <div className="amount">
           <small>Amount received</small>
           <b>{money(c.amount)}</b>

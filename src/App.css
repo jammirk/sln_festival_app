@@ -5,13 +5,14 @@ body {
   margin: 0;
   background: #f7f8f5;
   color: #26352f;
+  overflow-x: hidden;
   font:
     14px Inter,
     Arial,
     sans-serif;
 }
 .app {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
 }
 aside {
@@ -84,7 +85,8 @@ nav .selected {
 main {
   width: calc(100% - 244px);
   max-width: 1550px;
-  margin: auto;
+  margin: 0 auto;
+  min-width: 0;
   padding: 32px 42px;
 }
 header,
@@ -287,6 +289,23 @@ th {
   font-size: 10px;
   letter-spacing: 0.05em;
 }
+.sortButton {
+  appearance: none;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  padding: 0;
+  text-transform: inherit;
+}
+.sortButton:hover,
+.sortButton:focus-visible {
+  color: #456055;
+  text-decoration: underline;
+}
 .badge {
   font-size: 10px;
   padding: 5px 8px;
@@ -405,12 +424,23 @@ th {
   color: #d27b27;
   font-size: 28px;
 }
-.receiptbrand small,
 .receiptbrand b {
   display: block;
   color: #2d493f;
-  font-size: 12px;
-  margin-top: 3px;
+  font-size: 13px;
+  letter-spacing: 0.03em;
+  margin-top: 5px;
+}
+.ganeshaLogo {
+  display: block;
+  fill: none;
+  height: 48px;
+  margin: 0 auto;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
+  width: 48px;
 }
 .receipt h3 {
   text-align: center;
@@ -493,7 +523,7 @@ th {
   color: #a9453c;
   font-size: 12px;
 }
-@media (max-width: 800px) {
+@media (max-width: 1100px) {
   .app {
     display: block;
   }
@@ -576,7 +606,7 @@ th {
     margin-bottom: 17px;
   }
 }
-@media (max-width: 1024px) and (min-width: 801px) {
+@media (max-width: 1280px) and (min-width: 1101px) {
   aside {
     width: 210px;
   }
@@ -632,7 +662,7 @@ th {
     width: 100%;
   }
 }
-@media (max-width: 800px) {
+@media (max-width: 1100px) {
   .overlay {
     align-items: center;
     justify-items: center;
@@ -663,22 +693,39 @@ th {
   }
 }
 @media print {
+  @page {
+    margin: 10mm;
+  }
+  body {
+    background: #fff;
+  }
+  .app {
+    display: block;
+    min-height: 0;
+    padding: 0;
+    width: auto;
+  }
   aside,
-  header,
-  .noPrint,
-  .modalhead {
+  main {
     display: none !important;
   }
   .overlay {
+    display: block;
     position: static;
     background: none;
     padding: 0;
   }
   .modal {
+    display: block;
+    position: static;
     box-shadow: none;
     max-height: none;
     width: 100%;
     padding: 0;
+  }
+  .noPrint,
+  .modalhead {
+    display: none !important;
   }
   .receipt {
     border: 0;

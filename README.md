@@ -61,5 +61,7 @@ Apply the migrations in lexical order:
 2. `20260911000001_floorwise_flats.sql` — floor-wise flat renumbering for existing data.
 3. `20260911000002_seed_resident_names.sql` — resident-name import from the supplied owners sheets.
 4. `20260911000003_sln_receipt_numbers.sql` — changes receipts to `SLN-YYYY-0001` format.
+5. `20260913000000_add_donation_type.sql` — adds the donation type field.
+6. `20260913000001_add_festival_expense_categories.sql` — adds Groceries, Cook, Sweets, and Pujari categories.
 
 Existing Supabase projects should run only migrations not already applied.
