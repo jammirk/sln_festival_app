@@ -63,5 +63,6 @@ Apply the migrations in lexical order:
 4. `20260911000003_sln_receipt_numbers.sql` — changes receipts to `SLN-YYYY-0001` format.
 5. `20260913000000_add_donation_type.sql` — adds the donation type field.
 6. `20260913000001_add_festival_expense_categories.sql` — adds Groceries, Cook, Sweets, and Pujari categories.
+7. `20260913000002_prevent_duplicate_donations.sql` — prevents duplicate active donation types for a flat.
 
 Existing Supabase projects should run only migrations not already applied.

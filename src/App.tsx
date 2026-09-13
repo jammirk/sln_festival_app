@@ -74,7 +74,12 @@ const sortRows = <T extends Record<string, unknown>>(
     return sort.direction === "asc" ? result : -result;
   });
 };
-const today = "2026-09-11";
+const today = (() => {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+})();
 const donationTypes = ["Donation", "Annaprasadam", "Pooja", "Homam"];
 const cats = [
   "Decoration",
@@ -356,6 +361,17 @@ function FundManager({ session }: { session: Session }) {
       return alert("Select a flat and enter an amount greater than zero.");
     if (!donationTypes.includes(donationType))
       return alert("Select a donation type.");
+    if (
+      collections.some(
+        (collection) =>
+          collection.flat === flat &&
+          collection.donationType === donationType &&
+          collection.status === "ACTIVE",
+      )
+    )
+      return alert(
+        `An active ${donationType} entry already exists for flat ${displayFlatNumber(flat)}.`,
+      );
     if (saving || !confirm("Create this donation and receipt?")) return;
     setSaving(true);
     const { data, error: dbError } = await supabase
@@ -373,6 +389,10 @@ function FundManager({ session }: { session: Session }) {
       .select("*, flats(flat_number,resident_name)")
       .single();
     setSaving(false);
+    if (dbError?.message.includes("already exists"))
+      return alert(
+        `An active ${donationType} entry already exists for flat ${displayFlatNumber(flat)}.`,
+      );
     if (dbError || !data)
       return alert("Donation could not be saved. Please try again.");
     const c: Collection = {
@@ -1307,7 +1327,13 @@ function ExpenseForm({ close, save, categories, saving }: any) {
         <div className="formgrid">
           <label>
             Date
-            <input name="date" type="date" defaultValue={today} required />
+            <input
+              name="date"
+              type="date"
+              max={today}
+              defaultValue={today}
+              required
+            />
           </label>
           <label>
             Category
