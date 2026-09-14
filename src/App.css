@@ -398,6 +398,13 @@ th {
   display: block;
   margin-top: 6px;
 }
+.fieldHelp {
+  display: block;
+  color: #718078;
+  font-weight: 400;
+  line-height: 1.45;
+  margin-top: 6px;
+}
 .formgrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -489,6 +496,31 @@ th {
 .receiptPrintCopy {
   display: none;
 }
+.expenseDetails h3 {
+  font-size: 13px;
+  margin: 20px 0 10px;
+}
+.emptyAttachment {
+  color: #718078;
+  font-size: 13px;
+}
+.billPreview {
+  background: #f7f8f5;
+  border: 1px solid #e3eae5;
+  border-radius: 7px;
+  display: block;
+  height: 320px;
+  margin-top: 8px;
+  max-width: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+.attachmentLink {
+  color: #8d3328;
+  display: inline-block;
+  font-weight: 650;
+  margin-top: 10px;
+}
 .login {
   min-height: 100vh;
   display: grid;
@@ -508,6 +540,11 @@ th {
 .loginCard > p {
   color: #718078;
   margin: 6px 0 24px;
+}
+.loginCard > .loginNotice {
+  margin: -8px 0 22px;
+  font-size: 12px;
+  line-height: 1.5;
 }
 .loginCard form {
   text-align: left;

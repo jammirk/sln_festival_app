@@ -28,12 +28,15 @@ type Expense = {
   id: string;
   number: string;
   date: string;
+  categoryId: string;
   category: string;
   description: string;
   paidTo: string;
   amount: number;
   mode: string;
   status: "ACTIVE" | "VOIDED";
+  notes?: string;
+  attachmentPath?: string | null;
 };
 type SortState = { key: string; direction: "asc" | "desc" };
 type TableHeader = { label: string; sortKey?: string };
@@ -131,6 +134,11 @@ function FundManager({ session }: { session: Session }) {
     [selectedFloor, setSelectedFloor] = useState(1),
     [modal, setModal] = useState(""),
     [receipt, setReceipt] = useState<Collection | null>(null),
+    [selectedExpense, setSelectedExpense] = useState<Expense | null>(null),
+    [editingExpense, setEditingExpense] = useState<Expense | null>(null),
+    [expenseAttachmentUrl, setExpenseAttachmentUrl] = useState<string | null>(
+      null,
+    ),
     [cellEdit, setCellEdit] = useState<{
       id: string;
       field: "flat_number" | "resident_name" | "phone";
@@ -222,12 +230,15 @@ function FundManager({ session }: { session: Session }) {
           id: x.id,
           number: x.expense_number,
           date: x.expense_date,
+          categoryId: x.category_id,
           category: x.expense_categories?.name || "Uncategorized",
           description: x.description,
           paidTo: x.paid_to || "—",
           amount: Number(x.amount),
           mode: x.payment_mode,
           status: x.status,
+          notes: x.notes || "",
+          attachmentPath: x.attachment_path,
         })),
       );
       setCategories(catRes.data ?? []);
@@ -415,52 +426,105 @@ function FundManager({ session }: { session: Session }) {
     setReceipt(c);
     setModal("receipt");
   };
-  const saveExpense = async (fd: FormData) => {
-    let amount = Number(fd.get("amount")),
-      categoryId = String(fd.get("category")),
-      description = String(fd.get("description")),
-      category = categories.find((x) => x.id === categoryId);
-    if (!festival || festival.status === "CLOSED")
-      return alert("This festival is closed to new expenses.");
-    if (!amount || amount < 1 || !category || !description)
-      return alert(
-        "Fill in the required fields and use an amount greater than zero.",
-      );
-    if (saving || !confirm("Record this expense?")) return;
-    setSaving(true);
-    const { data, error: dbError } = await supabase
-      .from("expenses")
-      .insert({
-        festival_id: festival.id,
-        expense_date: String(fd.get("date")),
-        category_id: category.id,
-        description,
-        paid_to: String(fd.get("paidTo")) || null,
-        amount,
-        payment_mode: String(fd.get("mode")),
-        notes: null,
-        created_by: session.user.id,
-      })
-      .select("*, expense_categories(name)")
-      .single();
-    setSaving(false);
-    if (dbError || !data)
-      return alert("Expense could not be saved. Please try again.");
-    setExpenses((x) => [
-      {
-        id: data.id,
-        number: data.expense_number,
-        date: data.expense_date,
-        category: data.expense_categories?.name || category.name,
-        description: data.description,
-        paidTo: data.paid_to || "—",
-        amount: Number(data.amount),
-        mode: data.payment_mode,
-        status: data.status,
-      },
-      ...x,
-    ]);
+  const closeExpenseModal = () => {
     setModal("");
+    setEditingExpense(null);
+    setSelectedExpense(null);
+    setExpenseAttachmentUrl(null);
+  };
+  const saveExpense = async (fd: FormData) => {
+    const amount = Number(fd.get("amount"));
+    const categoryId = String(fd.get("category"));
+    const description = String(fd.get("description")).trim();
+    const category = categories.find((x) => x.id === categoryId);
+    const billEntry = fd.get("bill");
+    const bill = billEntry instanceof File && billEntry.size > 0 ? billEntry : null;
+    const allowedBillTypes = [
+      "application/pdf",
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ];
+    if (!festival || (!editingExpense && festival.status === "CLOSED"))
+      return alert("This festival is closed to new expenses.");
+    if (editingExpense?.status && editingExpense.status !== "ACTIVE")
+      return alert("Voided expenses cannot be edited.");
+    if (!amount || amount < 1 || !category || !description)
+      return alert("Fill in the required fields and use an amount greater than zero.");
+    if (bill && (!allowedBillTypes.includes(bill.type) || bill.size > 10 * 1024 * 1024))
+      return alert("Attach a PDF, JPG, PNG, or WebP bill no larger than 10 MB.");
+    if (saving || !confirm(editingExpense ? "Update this expense?" : "Record this expense?"))
+      return;
+
+    const safeBillName = bill
+      ? bill.name.replace(/[^a-zA-Z0-9._-]+/g, "-") || "bill"
+      : "";
+    const attachmentPath = bill
+      ? `${festival.id}/${crypto.randomUUID()}-${safeBillName}`
+      : editingExpense?.attachmentPath || null;
+    const values = {
+      expense_date: String(fd.get("date")),
+      category_id: category.id,
+      description,
+      paid_to: String(fd.get("paidTo")).trim() || null,
+      amount,
+      payment_mode: String(fd.get("mode")),
+      notes: String(fd.get("notes")).trim() || null,
+      attachment_path: attachmentPath,
+    };
+
+    setSaving(true);
+    const result = editingExpense
+      ? await supabase.from("expenses").update(values).eq("id", editingExpense.id).select("id").single()
+      : await supabase
+          .from("expenses")
+          .insert({ festival_id: festival.id, ...values, created_by: session.user.id })
+          .select("id")
+          .single();
+    if (result.error || !result.data) {
+      setSaving(false);
+      return alert("Expense could not be saved. Please try again.");
+    }
+
+    let attachmentError = "";
+    if (bill && attachmentPath) {
+      const { error: uploadError } = await supabase.storage
+        .from("expense-bills")
+        .upload(attachmentPath, bill, { contentType: bill.type });
+      if (uploadError) {
+        attachmentError = " The expense was saved, but the bill could not be uploaded.";
+        await supabase
+          .from("expenses")
+          .update({ attachment_path: editingExpense?.attachmentPath || null })
+          .eq("id", result.data.id);
+      } else if (
+        editingExpense?.attachmentPath &&
+        editingExpense.attachmentPath !== attachmentPath
+      ) {
+        await supabase.storage.from("expense-bills").remove([editingExpense.attachmentPath]);
+      }
+    }
+    setSaving(false);
+    await load();
+    closeExpenseModal();
+    if (attachmentError) alert(attachmentError);
+  };
+  const viewExpense = async (item: Expense) => {
+    setSelectedExpense(item);
+    setExpenseAttachmentUrl(null);
+    setModal("expenseView");
+    if (!item.attachmentPath) return;
+    const { data, error: urlError } = await supabase.storage
+      .from("expense-bills")
+      .createSignedUrl(item.attachmentPath, 60 * 15);
+    if (urlError || !data?.signedUrl)
+      return alert("The attached bill could not be opened.");
+    setExpenseAttachmentUrl(data.signedUrl);
+  };
+  const editExpense = (item: Expense) => {
+    if (item.status !== "ACTIVE") return alert("Voided expenses cannot be edited.");
+    setEditingExpense(item);
+    setModal("expense");
   };
   const voidItem = async (kind: "c" | "e", id: string) => {
     if (role !== "ADMIN")
@@ -809,7 +873,10 @@ function FundManager({ session }: { session: Session }) {
               title="Expense history"
               description="Every expense stays available for transparent auditing."
               action={role === "ADMIN" ? "+ Add Expense" : ""}
-              onClick={() => setModal("expense")}
+              onClick={() => {
+                setEditingExpense(null);
+                setModal("expense");
+              }}
             />
             <Filters
               value={expenseSearch}
@@ -847,6 +914,14 @@ function FundManager({ session }: { session: Session }) {
                       <Badge s={e.status} />
                     </td>
                     <td>
+                      <button className="link" onClick={() => void viewExpense(e)}>
+                        View
+                      </button>
+                      {e.status === "ACTIVE" && role === "ADMIN" && (
+                        <button className="link" onClick={() => editExpense(e)}>
+                          Edit
+                        </button>
+                      )}
                       {e.status === "ACTIVE" && role === "ADMIN" && (
                         <button
                           className="link danger"
@@ -918,10 +993,18 @@ function FundManager({ session }: { session: Session }) {
       )}{" "}
       {modal === "expense" && (
         <ExpenseForm
-          close={() => setModal("")}
+          close={closeExpenseModal}
           save={saveExpense}
           categories={categories}
           saving={saving}
+          expense={editingExpense}
+        />
+      )}{" "}
+      {modal === "expenseView" && selectedExpense && (
+        <ExpenseDetails
+          expense={selectedExpense}
+          attachmentUrl={expenseAttachmentUrl}
+          close={closeExpenseModal}
         />
       )}{" "}
       {modal === "settings" && (
@@ -1329,9 +1412,10 @@ function CollectionForm({ flats, close, save, saving }: any) {
     </Modal>
   );
 }
-function ExpenseForm({ close, save, categories, saving }: any) {
+function ExpenseForm({ close, save, categories, saving, expense }: any) {
+  const editing = Boolean(expense);
   return (
-    <Modal title="Add festival expense" close={close}>
+    <Modal title={editing ? "Edit festival expense" : "Add festival expense"} close={close}>
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -1345,14 +1429,17 @@ function ExpenseForm({ close, save, categories, saving }: any) {
               name="date"
               type="date"
               max={today}
-              defaultValue={today}
+              defaultValue={expense?.date || today}
               required
             />
           </label>
           <label>
             Category
-            <select name="category" required>
+            <select name="category" defaultValue={expense?.categoryId || ""} required>
               <option value="">Select category</option>
+              {expense && !categories.some((x: any) => x.id === expense.categoryId) && (
+                <option value={expense.categoryId}>{expense.category}</option>
+              )}
               {categories.map((x: any) => (
                 <option value={x.id} key={x.id}>
                   {x.name}
@@ -1366,34 +1453,88 @@ function ExpenseForm({ close, save, categories, saving }: any) {
           <input
             name="description"
             required
+            defaultValue={expense?.description || ""}
             placeholder="What was purchased?"
           />
         </label>
         <div className="formgrid">
           <label>
-            Amount (₹)
-            <input name="amount" type="number" min="1" required />
+            Amount (INR)
+            <input name="amount" type="number" min="1" defaultValue={expense?.amount || ""} required />
           </label>
           <label>
             Paid to
-            <input name="paidTo" placeholder="Vendor or person" />
+            <input
+              name="paidTo"
+              defaultValue={expense?.paidTo === "—" ? "" : expense?.paidTo || ""}
+              placeholder="Vendor or person"
+            />
           </label>
         </div>
         <label>
           Payment mode
-          <select name="mode">
+          <select name="mode" defaultValue={expense?.mode || "UPI"}>
             <option>UPI</option>
             <option>CASH</option>
             <option>BANK_TRANSFER</option>
             <option>OTHER</option>
           </select>
         </label>
+        <label>
+          Notes
+          <textarea name="notes" defaultValue={expense?.notes || ""} placeholder="Optional note" />
+        </label>
+        <label>
+          Bill attachment (PDF, JPG, PNG, or WebP; max 10 MB)
+          <input name="bill" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" />
+          {expense?.attachmentPath && (
+            <small className="fieldHelp">A bill is already attached. Choose a new file to replace it.</small>
+          )}
+        </label>
         <Actions
           close={close}
-          text={saving ? "Saving…" : "Confirm expense"}
+          text={saving ? "Saving..." : editing ? "Update expense" : "Confirm expense"}
           disabled={saving}
         />
       </form>
+    </Modal>
+  );
+}
+function ExpenseDetails({ expense, attachmentUrl, close }: any) {
+  const isImage = /\.(jpe?g|png|webp)(?:$|\?)/i.test(expense.attachmentPath || "");
+  return (
+    <Modal title="Expense details" close={close}>
+      <div className="expenseDetails">
+        <Line a="Expense no." b={expense.number} />
+        <Line a="Date" b={date(expense.date)} />
+        <Line a="Category" b={expense.category} />
+        <Line a="Description" b={expense.description} />
+        <Line a="Paid to" b={expense.paidTo} />
+        <Line a="Amount" b={money(expense.amount)} />
+        <Line a="Payment mode" b={expense.mode} />
+        <Line a="Status" b={expense.status} />
+        {expense.notes && <Line a="Notes" b={expense.notes} />}
+        <h3>Bill attachment</h3>
+        {!expense.attachmentPath && <p className="emptyAttachment">No bill was attached.</p>}
+        {expense.attachmentPath && !attachmentUrl && (
+          <p className="emptyAttachment">Loading attached bill...</p>
+        )}
+        {attachmentUrl && (
+          <>
+            {isImage ? (
+              <img className="billPreview" src={attachmentUrl} alt={`Bill for ${expense.number}`} />
+            ) : (
+              <iframe className="billPreview" src={attachmentUrl} title={`Bill for ${expense.number}`} />
+            )}
+            <a className="attachmentLink" href={attachmentUrl} target="_blank" rel="noreferrer">
+              Open bill in a new tab
+            </a>
+          </>
+        )}
+      </div>
+      <div className="actions">
+        <button type="button" className="muted" onClick={close}>Close</button>
+      </div>
     </Modal>
   );
 }
@@ -1585,7 +1726,11 @@ function Login() {
       <div className="loginCard">
         <div className="loginOm">ॐ</div>
         <h1>Ganesh Fund</h1>
-        <p>Festival Manager</p>
+        <p>SLN Urbana Festival Manager</p>
+        <p className="loginNotice">
+          Private portal for authorised Ganesh Festival Committee members.
+          We never ask for UPI PINs, OTPs, card details, or bank passwords.
+        </p>
         <form onSubmit={submit}>
           <label>
             Email
