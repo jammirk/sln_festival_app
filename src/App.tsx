@@ -370,7 +370,7 @@ function FundManager({ session }: { session: Session }) {
     addSheet("Summary", summarySheet);
     XLSX.writeFile(workbook, `ganesh-festival-${festival?.year || "report"}-export.xlsx`);
   };
-  const exportPdf = async () => {
+  const exportPdf = async (includeBills = true) => {
     const reportWindow = window.open("", "_blank");
     if (!reportWindow)
       return alert("Allow pop-ups for this site to export the PDF report.");
@@ -388,9 +388,9 @@ function FundManager({ session }: { session: Session }) {
     const activeExpenses = expenses
       .filter((item) => item.status === "ACTIVE")
       .sort((a, b) => a.date.localeCompare(b.date) || a.number.localeCompare(b.number));
-    const imageExpenses = activeExpenses.filter(
-      (item) => item.attachmentPath && isImageAttachment(item.attachmentPath),
-    );
+    const imageExpenses = includeBills
+      ? activeExpenses.filter((item) => item.attachmentPath && isImageAttachment(item.attachmentPath))
+      : [];
     const attachmentUrls = await Promise.all(
       imageExpenses.map(async (item) => {
         const { data } = await supabase.storage
@@ -498,11 +498,11 @@ function FundManager({ session }: { session: Session }) {
       <h2>Expenses (Date: ascending)</h2>
       <table><thead><tr><th>Expense No.</th><th>Date</th><th>Category</th><th>Description</th><th>Paid to</th><th>Amount</th><th>Mode</th><th>Bill</th></tr></thead>
       <tbody>${expenseRows || '<tr><td colspan="8">No active expenses recorded.</td></tr>'}</tbody></table>
-      <section class="bill-pages">
+      ${includeBills ? `<section class="bill-pages">
         <h2>Expense bill images</h2>
         ${billImages ? `<div class="bill-grid">${billImages}</div>` : '<p class="note">No image bills have been uploaded.</p>'}
-      </section>
-      ${pdfBills.length ? `<p class="note">PDF bill attachments: ${escapeHtml(pdfBills.map((item) => item.number).join(", "))}. Open them from the expense table when needed.</p>` : ""}
+      </section>` : ""}
+      ${includeBills && pdfBills.length ? `<p class="note">PDF bill attachments: ${escapeHtml(pdfBills.map((item) => item.number).join(", "))}. Open them from the expense table when needed.</p>` : ""}
       <p class="note">Choose “Save as PDF” in the print dialog to download this statement.</p>
       <footer>SLN URBANA OWNERS WELFARE ASSOCIATION - ALWAL</footer>
       </body></html>`);
@@ -1119,8 +1119,8 @@ function FundManager({ session }: { session: Session }) {
               <div>
                 <h2>Export financial records</h2>
                 <p>
-                  Download an Excel workbook or a print-ready PDF statement
-                  with bills.
+                  Download an Excel workbook, a PDF statement with bills, or
+                  a compact PDF without bill images.
                 </p>
               </div>
               <div className="exportActions">
@@ -1129,6 +1129,9 @@ function FundManager({ session }: { session: Session }) {
                 </button>
                 <button className="muted" onClick={() => void exportPdf()}>
                   Export PDF statement
+                </button>
+                <button className="muted" onClick={() => void exportPdf(false)}>
+                  Export to PDF - No Bills
                 </button>
               </div>
             </div>
