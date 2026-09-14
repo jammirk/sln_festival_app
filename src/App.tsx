@@ -370,6 +370,63 @@ function FundManager({ session }: { session: Session }) {
     addSheet("Summary", summarySheet);
     XLSX.writeFile(workbook, `ganesh-festival-${festival?.year || "report"}-export.xlsx`);
   };
+  const exportOutstandingFlatsPdf = () => {
+    const reportWindow = window.open("", "_blank");
+    if (!reportWindow)
+      return alert("Allow pop-ups for this site to export the PDF report.");
+
+    const outstandingFlats = flats
+      .filter((flat) => flatStatus(flat.number).amount === 0)
+      .sort((a, b) =>
+        displayFlatNumber(a.number).localeCompare(displayFlatNumber(b.number), undefined, {
+          numeric: true,
+        }),
+      );
+    const totalOutstanding = outstandingFlats.reduce((sum, flat) => sum + flat.expected, 0);
+    const rows = outstandingFlats
+      .map(
+        (flat, index) => `<tr>
+          <td>${index + 1}</td>
+          <td>${escapeHtml(displayFlatNumber(flat.number))}</td>
+          <td>${escapeHtml(flat.resident)}</td>
+          <td>${escapeHtml(flat.phone || "-")}</td>
+          <td class="amount">${escapeHtml(money(flat.expected))}</td>
+        </tr>`,
+      )
+      .join("");
+
+    reportWindow.addEventListener(
+      "load",
+      () => {
+        reportWindow.focus();
+        reportWindow.print();
+      },
+      { once: true },
+    );
+    reportWindow.document.open();
+    reportWindow.document.write(`<!doctype html>
+      <html lang="en"><head><meta charset="UTF-8" />
+      <title>${escapeHtml(festival?.name || "Festival")} - Outstanding Flats</title>
+      <style>
+        @page { size: A4 portrait; margin: 18mm 14mm; }
+        * { box-sizing: border-box; }
+        body { color: #1f2d27; font: 11px Arial, sans-serif; margin: 0; }
+        h1 { font-size: 20px; margin: 0 0 5px; } p { margin: 0; }
+        .subtitle { color: #5f6f66; } .summary { background: #f7f1ee; border: 1px solid #eadbd4; border-radius: 5px; margin: 18px 0; padding: 11px; }
+        .summary b { display: block; font-size: 17px; margin-top: 4px; }
+        table { border-collapse: collapse; width: 100%; } tr { break-inside: avoid; page-break-inside: avoid; }
+        th { background: #7b2d26; color: #fff; font-size: 9px; letter-spacing: .05em; text-align: left; text-transform: uppercase; }
+        th, td { border: 1px solid #dce3de; padding: 7px; vertical-align: top; } td.amount { text-align: right; white-space: nowrap; }
+        .empty { color: #4e6056; padding: 16px 0; } footer { border-top: 1px solid #dce3de; color: #4e6056; font-size: 10px; font-weight: bold; margin-top: 22px; padding-top: 8px; text-align: center; }
+      </style></head><body>
+      <h1>${escapeHtml(festival?.name || "Festival")} - Outstanding Flats</h1>
+      <p class="subtitle">Generated on ${escapeHtml(date(today))}. This list includes flats with no donation received.</p>
+      <section class="summary"><span>Outstanding flats: ${outstandingFlats.length}</span><b>Total outstanding: ${escapeHtml(money(totalOutstanding))}</b></section>
+      ${rows ? `<table><thead><tr><th>S. No.</th><th>Flat No.</th><th>Resident</th><th>Phone</th><th>Outstanding</th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="empty">All flats have received at least one donation.</p>'}
+      <footer>SLN URBANA OWNERS WELFARE ASSOCIATION - ALWAL</footer>
+      </body></html>`);
+    reportWindow.document.close();
+  };
   const exportPdf = async (includeBills = true) => {
     const reportWindow = window.open("", "_blank");
     if (!reportWindow)
@@ -968,7 +1025,7 @@ function FundManager({ session }: { session: Session }) {
                 { label: "Donation Type", sortKey: "donationType" },
                 { label: "Amount", sortKey: "amount" },
                 { label: "Mode", sortKey: "mode" },
-                { label: "Status", sortKey: "status" },
+                { label: "Payment Status" },
                 { label: "Actions" },
               ]}
               sort={collectionSort}
@@ -987,7 +1044,7 @@ function FundManager({ session }: { session: Session }) {
                     <td>{money(c.amount)}</td>
                     <td>{c.mode}</td>
                     <td>
-                      <Badge s={c.status} />
+                      <Badge s={flatStatus(c.flat).status} />
                     </td>
                     <td>
                       <button
@@ -1132,6 +1189,9 @@ function FundManager({ session }: { session: Session }) {
                 </button>
                 <button className="muted" onClick={() => void exportPdf(false)}>
                   Export to PDF - No Bills
+                </button>
+                <button className="muted" onClick={exportOutstandingFlatsPdf}>
+                  Outstanding Flats
                 </button>
               </div>
             </div>
