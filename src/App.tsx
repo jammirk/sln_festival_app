@@ -475,8 +475,10 @@ function FundManager({ session }: { session: Session }) {
         .donations .resident { width: 39%; } .donations .type { width: 11%; } .donations .amount-col { width: 13%; } .donations .mode { width: 12%; }
         tr { page-break-inside: avoid; page-break-after: auto; } th { background: #7b2d26; color: #fff; font-size: 9px; font-weight: 800; letter-spacing: .05em; text-align: left; text-transform: uppercase; }
         th, td { border: 1px solid #dce3de; padding: 6px; vertical-align: top; } .donations td { overflow-wrap: anywhere; } td.amount { text-align: right; white-space: nowrap; }
-        figure { break-inside: avoid; border: 1px solid #dce3de; margin: 0 0 14px; padding: 9px; }
-        figure img { display: block; max-height: 165mm; max-width: 100%; object-fit: contain; width: auto; }
+        .bill-pages { break-before: page; page-break-before: always; }
+        .bill-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8mm; }
+        .bill-grid figure { break-inside: avoid; border: 1px solid #dce3de; margin: 0; min-width: 0; padding: 7px; }
+        .bill-grid figure img { display: block; height: auto; margin: 0 auto; max-height: 112mm; max-width: 100%; object-fit: contain; width: auto; }
         figcaption { color: #4e6056; font-weight: bold; margin-top: 7px; } .missing-bill { color: #8d3328; }
         .note { color: #5f6f66; font-size: 10px; } @media print { .note { display: none; } }
         footer { border-top: 1px solid #dce3de; color: #4e6056; font-size: 10px; font-weight: bold; margin-top: 22px; padding-top: 8px; text-align: center; }
@@ -496,8 +498,10 @@ function FundManager({ session }: { session: Session }) {
       <h2>Expenses (Date: ascending)</h2>
       <table><thead><tr><th>Expense No.</th><th>Date</th><th>Category</th><th>Description</th><th>Paid to</th><th>Amount</th><th>Mode</th><th>Bill</th></tr></thead>
       <tbody>${expenseRows || '<tr><td colspan="8">No active expenses recorded.</td></tr>'}</tbody></table>
-      <h2>Expense bill images</h2>
-      ${billImages || '<p class="note">No image bills have been uploaded.</p>'}
+      <section class="bill-pages">
+        <h2>Expense bill images</h2>
+        ${billImages ? `<div class="bill-grid">${billImages}</div>` : '<p class="note">No image bills have been uploaded.</p>'}
+      </section>
       ${pdfBills.length ? `<p class="note">PDF bill attachments: ${escapeHtml(pdfBills.map((item) => item.number).join(", "))}. Open them from the expense table when needed.</p>` : ""}
       <p class="note">Choose “Save as PDF” in the print dialog to download this statement.</p>
       <footer>SLN URBANA OWNERS WELFARE ASSOCIATION - ALWAL</footer>
