@@ -920,7 +920,6 @@ function FundManager({ session }: { session: Session }) {
                     "Flat Number",
                     "Resident",
                     "Total Collected",
-                    "Outstanding",
                     "Payment Status",
                   ]}
                 >
@@ -990,7 +989,6 @@ function FundManager({ session }: { session: Session }) {
                               />
                             </td>
                             <td>{money(v.amount)}</td>
-                            <td>{money(Math.max(0, f.expected - v.amount))}</td>
                             <td>
                               <Badge s={v.status} />
                             </td>
@@ -1044,7 +1042,7 @@ function FundManager({ session }: { session: Session }) {
                     <td>{money(c.amount)}</td>
                     <td>{c.mode}</td>
                     <td>
-                      <Badge s={flatStatus(c.flat).status} />
+                      <Badge s={c.status === "ACTIVE" && c.amount > 0 ? "PAID" : "PENDING"} />
                     </td>
                     <td>
                       <button

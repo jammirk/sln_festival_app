@@ -66,4 +66,6 @@ Apply the migrations in lexical order:
 7. `20260913000002_prevent_duplicate_donations.sql` — prevents duplicate active donation types for a flat.
 8. `20260914000000_expense_attachments_and_edits.sql` — creates private expense-bill storage and allows administrators to edit active expenses.
 
+9. `20260914000001_add_sln_society_flat.sql` adds flat 100 for SLN Society.
+
 Existing Supabase projects should run only migrations not already applied.
