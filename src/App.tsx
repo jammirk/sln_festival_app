@@ -47,6 +47,15 @@ const money = (n: number) =>
     maximumFractionDigits: 0,
   }).format(n);
 const date = (d: string) => d.split("-").reverse().join("-");
+const isImageAttachment = (path?: string | null) =>
+  /\.(jpe?g|png|webp)(?:$|\?)/i.test(path || "");
+const escapeHtml = (value: unknown) =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 const searchRow = (row: Record<string, unknown>, query: string) => {
   const term = query.trim().toLowerCase();
   if (!term) return true;
@@ -360,6 +369,140 @@ function FundManager({ session }: { session: Session }) {
     addSheet("Daily Expenditure", expensesSheet);
     addSheet("Summary", summarySheet);
     XLSX.writeFile(workbook, `ganesh-festival-${festival?.year || "report"}-export.xlsx`);
+  };
+  const exportPdf = async () => {
+    const reportWindow = window.open("", "_blank");
+    if (!reportWindow)
+      return alert("Allow pop-ups for this site to export the PDF report.");
+
+    reportWindow.document.write(
+      "<!doctype html><title>Preparing festival statement…</title><p>Preparing PDF report…</p>",
+    );
+    const activeCollections = collections
+      .filter((item) => item.status === "ACTIVE")
+      .sort((a, b) =>
+        displayFlatNumber(a.flat).localeCompare(displayFlatNumber(b.flat), undefined, {
+          numeric: true,
+        }),
+      );
+    const activeExpenses = expenses
+      .filter((item) => item.status === "ACTIVE")
+      .sort((a, b) => a.date.localeCompare(b.date) || a.number.localeCompare(b.number));
+    const imageExpenses = activeExpenses.filter(
+      (item) => item.attachmentPath && isImageAttachment(item.attachmentPath),
+    );
+    const attachmentUrls = await Promise.all(
+      imageExpenses.map(async (item) => {
+        const { data } = await supabase.storage
+          .from("expense-bills")
+          .createSignedUrl(item.attachmentPath!, 60 * 15);
+        return [item.id, data?.signedUrl || ""] as const;
+      }),
+    );
+    const billUrlByExpense = new Map(attachmentUrls);
+    const donationRows = activeCollections
+      .map(
+        (item) => `<tr>
+          <td>${escapeHtml(item.receipt)}</td>
+          <td>${escapeHtml(date(item.date))}</td>
+          <td>${escapeHtml(displayFlatNumber(item.flat))}</td>
+          <td>${escapeHtml(item.resident)}</td>
+          <td>${escapeHtml(item.donationType)}</td>
+          <td class="amount">${escapeHtml(money(item.amount))}</td>
+          <td>${escapeHtml(item.mode)}</td>
+        </tr>`,
+      )
+      .join("");
+    const expenseRows = activeExpenses
+      .map(
+        (item) => `<tr>
+          <td>${escapeHtml(item.number)}</td>
+          <td>${escapeHtml(date(item.date))}</td>
+          <td>${escapeHtml(item.category)}</td>
+          <td>${escapeHtml(item.description)}</td>
+          <td>${escapeHtml(item.paidTo)}</td>
+          <td class="amount">${escapeHtml(money(item.amount))}</td>
+          <td>${escapeHtml(item.mode)}</td>
+          <td>${
+            item.attachmentPath
+              ? isImageAttachment(item.attachmentPath)
+                ? "Image bill attached"
+                : "PDF bill attached"
+              : "—"
+          }</td>
+        </tr>`,
+      )
+      .join("");
+    const billImages = imageExpenses
+      .map((item) => {
+        const url = billUrlByExpense.get(item.id);
+        return url
+          ? `<figure>
+              <img src="${escapeHtml(url)}" alt="Bill for ${escapeHtml(item.number)}" />
+              <figcaption>${escapeHtml(item.number)} · ${escapeHtml(item.description)} · ${escapeHtml(money(item.amount))}</figcaption>
+            </figure>`
+          : `<p class="missing-bill">${escapeHtml(item.number)}: bill image could not be loaded.</p>`;
+      })
+      .join("");
+    const pdfBills = activeExpenses.filter(
+      (item) => item.attachmentPath && !isImageAttachment(item.attachmentPath),
+    );
+
+    reportWindow.addEventListener(
+      "load",
+      () => {
+        reportWindow.focus();
+        reportWindow.print();
+      },
+      { once: true },
+    );
+    reportWindow.document.open();
+    reportWindow.document.write(`<!doctype html>
+      <html lang="en"><head><meta charset="UTF-8" />
+      <title>${escapeHtml(festival?.name || "Ganesh Festival")} — Financial Statement</title>
+      <style>
+        @page { size: A4 landscape; margin: 12mm; }
+        * { box-sizing: border-box; }
+        body { color: #1f2d27; font: 11px Arial, sans-serif; margin: 0; }
+        h1 { font-size: 21px; margin: 0 0 4px; } h2 { font-size: 15px; margin: 25px 0 9px; }
+        .subtitle { color: #5f6f66; margin: 0; } .generated { color: #5f6f66; font-size: 10px; margin-top: 4px; }
+        .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 18px 0; }
+        .summary div { background: #f7f1ee; border: 1px solid #eadbd4; border-radius: 5px; padding: 10px; }
+        .summary span { color: #6b584e; display: block; font-size: 10px; } .summary b { display: block; font-size: 16px; margin-top: 5px; }
+        table { border-collapse: collapse; page-break-inside: auto; width: 100%; }
+        .donations { table-layout: fixed; }
+        .donations .receipt { width: 11%; } .donations .date { width: 9%; } .donations .flat { width: 5%; }
+        .donations .resident { width: 39%; } .donations .type { width: 11%; } .donations .amount-col { width: 13%; } .donations .mode { width: 12%; }
+        tr { page-break-inside: avoid; page-break-after: auto; } th { background: #7b2d26; color: #fff; font-size: 9px; font-weight: 800; letter-spacing: .05em; text-align: left; text-transform: uppercase; }
+        th, td { border: 1px solid #dce3de; padding: 6px; vertical-align: top; } .donations td { overflow-wrap: anywhere; } td.amount { text-align: right; white-space: nowrap; }
+        figure { break-inside: avoid; border: 1px solid #dce3de; margin: 0 0 14px; padding: 9px; }
+        figure img { display: block; max-height: 165mm; max-width: 100%; object-fit: contain; width: auto; }
+        figcaption { color: #4e6056; font-weight: bold; margin-top: 7px; } .missing-bill { color: #8d3328; }
+        .note { color: #5f6f66; font-size: 10px; } @media print { .note { display: none; } }
+        footer { border-top: 1px solid #dce3de; color: #4e6056; font-size: 10px; font-weight: bold; margin-top: 22px; padding-top: 8px; text-align: center; }
+      </style></head><body>
+      <h1>SLN Urbana - Ganesh Festival 2026 — Financial Statement</h1>
+      <p class="subtitle">Festival year ${escapeHtml(festival?.year || "")}</p>
+      <p class="generated">Generated on ${escapeHtml(date(today))}. Figures and tables include active records only.</p>
+      <section class="summary">
+        <div><span>Opening balance</span><b>${escapeHtml(money(opening))}</b></div>
+        <div><span>Donations received</span><b>${escapeHtml(money(income))}</b></div>
+        <div><span>Total expenses</span><b>${escapeHtml(money(expense))}</b></div>
+        <div><span>Closing balance</span><b>${escapeHtml(money(balance))}</b></div>
+      </section>
+      <h2>Donations (Flat Number: ascending)</h2>
+      <table class="donations"><colgroup><col class="receipt" /><col class="date" /><col class="flat" /><col class="resident" /><col class="type" /><col class="amount-col" /><col class="mode" /></colgroup><thead><tr><th>Receipt No.</th><th>Date</th><th>Flat</th><th>Resident</th><th>Type</th><th>Amount</th><th>Mode</th></tr></thead>
+      <tbody>${donationRows || '<tr><td colspan="7">No active donations recorded.</td></tr>'}</tbody></table>
+      <h2>Expenses (Date: ascending)</h2>
+      <table><thead><tr><th>Expense No.</th><th>Date</th><th>Category</th><th>Description</th><th>Paid to</th><th>Amount</th><th>Mode</th><th>Bill</th></tr></thead>
+      <tbody>${expenseRows || '<tr><td colspan="8">No active expenses recorded.</td></tr>'}</tbody></table>
+      <h2>Expense bill images</h2>
+      ${billImages || '<p class="note">No image bills have been uploaded.</p>'}
+      ${pdfBills.length ? `<p class="note">PDF bill attachments: ${escapeHtml(pdfBills.map((item) => item.number).join(", "))}. Open them from the expense table when needed.</p>` : ""}
+      <p class="note">Choose “Save as PDF” in the print dialog to download this statement.</p>
+      <footer>SLN URBANA OWNERS WELFARE ASSOCIATION - ALWAL</footer>
+      </body></html>`);
+    reportWindow.document.close();
   };
   const saveCollection = async (fd: FormData) => {
     let flat = String(fd.get("flat")),
@@ -972,13 +1115,18 @@ function FundManager({ session }: { session: Session }) {
               <div>
                 <h2>Export financial records</h2>
                 <p>
-                  Download an Excel workbook with Donations, Daily
-                  Expenditure, and Summary worksheets.
+                  Download an Excel workbook or a print-ready PDF statement
+                  with bills.
                 </p>
               </div>
-              <button className="primary" onClick={exportWorkbook}>
-                Export Excel workbook
-              </button>
+              <div className="exportActions">
+                <button className="primary" onClick={exportWorkbook}>
+                  Export Excel workbook
+                </button>
+                <button className="muted" onClick={() => void exportPdf()}>
+                  Export PDF statement
+                </button>
+              </div>
             </div>
           </section>
         )}

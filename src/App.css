@@ -521,6 +521,11 @@ th {
   font-weight: 650;
   margin-top: 10px;
 }
+.exportActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
 .login {
   min-height: 100vh;
   display: grid;
