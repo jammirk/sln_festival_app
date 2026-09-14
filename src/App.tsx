@@ -459,9 +459,9 @@ function FundManager({ session }: { session: Session }) {
     reportWindow.document.open();
     reportWindow.document.write(`<!doctype html>
       <html lang="en"><head><meta charset="UTF-8" />
-      <title>${escapeHtml(festival?.name || "Ganesh Festival")} — Financial Statement</title>
+      <title>SLN Urbana - Ganesh Festival 2026 — Financial Statement</title>
       <style>
-        @page { size: A4 landscape; margin: 12mm; }
+        @page { size: A4 landscape; margin: 22mm 12mm 18mm; }
         * { box-sizing: border-box; }
         body { color: #1f2d27; font: 11px Arial, sans-serif; margin: 0; }
         h1 { font-size: 21px; margin: 0 0 4px; } h2 { font-size: 15px; margin: 25px 0 9px; }
@@ -479,11 +479,18 @@ function FundManager({ session }: { session: Session }) {
         figure img { display: block; max-height: 165mm; max-width: 100%; object-fit: contain; width: auto; }
         figcaption { color: #4e6056; font-weight: bold; margin-top: 7px; } .missing-bill { color: #8d3328; }
         .note { color: #5f6f66; font-size: 10px; } @media print { .note { display: none; } }
+        .pdfHeader { border-bottom: 1px solid #dce3de; padding-bottom: 5px; }
         footer { border-top: 1px solid #dce3de; color: #4e6056; font-size: 10px; font-weight: bold; margin-top: 22px; padding-top: 8px; text-align: center; }
+        @media print {
+          .pdfHeader { left: 0; margin: 0; position: fixed; right: 0; top: -16mm; }
+          .pdfHeader h1 { font-size: 14px; margin: 0; text-align: center; }
+          .pdfHeader .subtitle, .pdfHeader .generated { display: none; }
+          footer { bottom: -12mm; left: 0; margin: 0; position: fixed; right: 0; }
+        }
       </style></head><body>
-      <h1>SLN Urbana - Ganesh Festival 2026 — Financial Statement</h1>
+      <header class="pdfHeader"><h1>SLN Urbana - Ganesh Festival 2026 — Financial Statement</h1>
       <p class="subtitle">Festival year ${escapeHtml(festival?.year || "")}</p>
-      <p class="generated">Generated on ${escapeHtml(date(today))}. Figures and tables include active records only.</p>
+      <p class="generated">Generated on ${escapeHtml(date(today))}. Figures and tables include active records only.</p></header>
       <section class="summary">
         <div><span>Opening balance</span><b>${escapeHtml(money(opening))}</b></div>
         <div><span>Donations received</span><b>${escapeHtml(money(income))}</b></div>
