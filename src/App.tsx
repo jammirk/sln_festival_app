@@ -376,7 +376,7 @@ function FundManager({ session }: { session: Session }) {
       return alert("Allow pop-ups for this site to export the PDF report.");
 
     const outstandingFlats = flats
-      .filter((flat) => flatStatus(flat.number).amount === 0)
+      .filter((flat) => flat.expected > 0 && flatStatus(flat.number).amount === 0)
       .sort((a, b) =>
         displayFlatNumber(a.number).localeCompare(displayFlatNumber(b.number), undefined, {
           numeric: true,
@@ -882,30 +882,20 @@ function FundManager({ session }: { session: Session }) {
             <div className="flatLayout">
               <div className="floorMenu">
                 <small>SELECT FLOOR</small>
-                {[1, 2, 3, 4, 5, 6].map((floor) => (
+                {[0, 1, 2, 3, 4, 5, 6].map((floor) => (
                   <button
                     className={selectedFloor === floor ? "selectedFloor" : ""}
                     key={floor}
                     onClick={() => setSelectedFloor(floor)}
                   >
-                    <b>Floor {floor}</b>
-                    <span>{floor === 1 ? "13 flats" : "18 flats"}</span>
+                    <b>{floor === 0 ? "Society" : `Floor ${floor}`}</b><span>{floor === 0 ? "1 flat" : floor === 1 ? "14 flats" : "18 flats"}</span>
                   </button>
                 ))}
               </div>
               <div className="floorContent">
                 <div className="floorTitle">
                   <div>
-                    <h3>Floor {selectedFloor}</h3>
-                    <span>
-                      {selectedFloor === 1
-                        ? "Flats 101–111, 113 and 114"
-                        : "Flats " +
-                          selectedFloor +
-                          "01–" +
-                          selectedFloor +
-                          "18"}
-                    </span>
+                    <h3>{selectedFloor === 0 ? "Society fund" : `Floor ${selectedFloor}`}</h3><span>{selectedFloor === 0 ? "Flat 000" : selectedFloor === 1 ? "Flats 100-111, 113 and 114" : "Flats " + selectedFloor + "01-" + selectedFloor + "18"}</span>
                   </div>
                   <b>
                     {
