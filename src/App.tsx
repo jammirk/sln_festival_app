@@ -597,12 +597,12 @@ function FundManager({ session }: { session: Session }) {
       <h2>Donations (Flat Number: ascending)</h2>
       <table class="donations"><colgroup><col class="receipt" /><col class="date" /><col class="flat" /><col class="resident" /><col class="type" /><col class="amount-col" /><col class="mode" /></colgroup><thead><tr><th>Receipt No.</th><th>Date</th><th>Flat</th><th>Resident</th><th>Type</th><th>Amount</th><th>Mode</th></tr></thead>
       <tbody>${donationRows || '<tr><td colspan="7">No active donations recorded.</td></tr>'}</tbody></table>
-      <h2>Expenses (Date: ascending)</h2>
-      <table><thead><tr><th>Expense No.</th><th>Date</th><th>Category</th><th>Description</th><th>Paid to</th><th>Amount</th><th>Mode</th><th>Bill</th></tr></thead>
-      <tbody>${expenseRows || '<tr><td colspan="8">No active expenses recorded.</td></tr>'}</tbody></table>
       <h2>Sponsors</h2>
       <table><thead><tr><th>Date</th><th>Flat No.</th><th>Resident</th><th>Sponsor For</th></tr></thead>
       <tbody>${sponsorRows || '<tr><td colspan="4">No sponsors have been added.</td></tr>'}</tbody></table>
+      <h2>Expenses (Date: ascending)</h2>
+      <table><thead><tr><th>Expense No.</th><th>Date</th><th>Category</th><th>Description</th><th>Paid to</th><th>Amount</th><th>Mode</th><th>Bill</th></tr></thead>
+      <tbody>${expenseRows || '<tr><td colspan="8">No active expenses recorded.</td></tr>'}</tbody></table>
       ${includeBills ? `<section class="bill-pages">
         <h2>Expense bill images</h2>
         ${billImages ? `<div class="bill-grid">${billImages}</div>` : '<p class="note">No image bills have been uploaded.</p>'}
