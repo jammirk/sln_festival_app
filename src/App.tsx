@@ -372,6 +372,12 @@ function FundManager({ session }: { session: Session }) {
       "Payment Mode": item.mode,
       Status: item.status,
     }));
+    const sponsorsSheet = sponsors.map((item) => ({
+      Date: date(item.date),
+      "Flat No.": displayFlatNumber(item.flat),
+      "Resident Name": item.resident,
+      "Sponsor For": item.sponsorFor,
+    }));
     const summarySheet = [
       { Item: "Festival", Value: festival?.name || "" },
       { Item: "Year", Value: festival?.year || "" },
@@ -394,6 +400,7 @@ function FundManager({ session }: { session: Session }) {
     };
     addSheet("Donations", collectionsSheet);
     addSheet("Daily Expenditure", expensesSheet);
+    addSheet("Sponsors", sponsorsSheet);
     addSheet("Summary", summarySheet);
     XLSX.writeFile(workbook, `ganesh-festival-${festival?.year || "report"}-export.xlsx`);
   };
@@ -517,6 +524,17 @@ function FundManager({ session }: { session: Session }) {
         </tr>`,
       )
       .join("");
+    const sponsorRows = [...sponsors]
+      .sort((a, b) => b.date.localeCompare(a.date) || a.flat.localeCompare(b.flat, undefined, { numeric: true }))
+      .map(
+        (item) => `<tr>
+          <td>${escapeHtml(date(item.date))}</td>
+          <td>${escapeHtml(displayFlatNumber(item.flat))}</td>
+          <td>${escapeHtml(item.resident)}</td>
+          <td>${escapeHtml(item.sponsorFor)}</td>
+        </tr>`,
+      )
+      .join("");
     const billImages = imageExpenses
       .map((item) => {
         const url = billUrlByExpense.get(item.id);
@@ -582,6 +600,9 @@ function FundManager({ session }: { session: Session }) {
       <h2>Expenses (Date: ascending)</h2>
       <table><thead><tr><th>Expense No.</th><th>Date</th><th>Category</th><th>Description</th><th>Paid to</th><th>Amount</th><th>Mode</th><th>Bill</th></tr></thead>
       <tbody>${expenseRows || '<tr><td colspan="8">No active expenses recorded.</td></tr>'}</tbody></table>
+      <h2>Sponsors</h2>
+      <table><thead><tr><th>Date</th><th>Flat No.</th><th>Resident</th><th>Sponsor For</th></tr></thead>
+      <tbody>${sponsorRows || '<tr><td colspan="4">No sponsors have been added.</td></tr>'}</tbody></table>
       ${includeBills ? `<section class="bill-pages">
         <h2>Expense bill images</h2>
         ${billImages ? `<div class="bill-grid">${billImages}</div>` : '<p class="note">No image bills have been uploaded.</p>'}
