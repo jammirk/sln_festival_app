@@ -1228,26 +1228,25 @@ function FundManager({ session }: { session: Session }) {
                 setModal("sponsor");
               }}
             />
-            <Table headers={["Date", "Flat", "Resident", "Sponsor For", "Actions"]}>
+            <Table headers={role === "ADMIN" ? ["S. No.", "Date", "Flat No.", "Resident", "Sponsor For", "Actions"] : ["S. No.", "Date", "Flat No.", "Resident", "Sponsor For"]}>
               <>
-                {sponsors.map((sponsor) => (
+                {sponsors.map((sponsor, index) => (
                   <tr key={sponsor.id}>
+                    <td>{index + 1}</td>
                     <td>{date(sponsor.date)}</td>
                     <td><b>{displayFlatNumber(sponsor.flat)}</b></td>
                     <td>{sponsor.resident}</td>
                     <td>{sponsor.sponsorFor}</td>
-                    <td>
-                      {role === "ADMIN" && (
-                        <>
-                          <button className="link" onClick={() => editSponsor(sponsor)}>Edit</button>
-                          <button className="link danger" onClick={() => void deleteSponsor(sponsor)}>Delete</button>
-                        </>
-                      )}
-                    </td>
+                    {role === "ADMIN" && (
+                      <td>
+                        <button className="link" onClick={() => editSponsor(sponsor)}>Edit</button>
+                        <button className="link danger" onClick={() => void deleteSponsor(sponsor)}>Delete</button>
+                      </td>
+                    )}
                   </tr>
                 ))}
                 {!sponsors.length && (
-                  <tr><td colSpan={5}>No sponsors have been added.</td></tr>
+                  <tr><td colSpan={role === "ADMIN" ? 6 : 5}>No sponsors have been added.</td></tr>
                 )}
               </>
             </Table>
