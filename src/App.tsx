@@ -38,6 +38,14 @@ type Expense = {
   notes?: string;
   attachmentPath?: string | null;
 };
+type Sponsor = {
+  id: string;
+  flatId: string;
+  flat: string;
+  resident: string;
+  sponsorFor: string;
+  date: string;
+};
 type SortState = { key: string; direction: "asc" | "desc" };
 type TableHeader = { label: string; sortKey?: string };
 const money = (n: number) =>
@@ -143,6 +151,8 @@ function FundManager({ session }: { session: Session }) {
     [selectedFloor, setSelectedFloor] = useState(1),
     [modal, setModal] = useState(""),
     [receipt, setReceipt] = useState<Collection | null>(null),
+    [editingCollection, setEditingCollection] = useState<Collection | null>(null),
+    [editingSponsor, setEditingSponsor] = useState<Sponsor | null>(null),
     [selectedExpense, setSelectedExpense] = useState<Expense | null>(null),
     [editingExpense, setEditingExpense] = useState<Expense | null>(null),
     [expenseAttachmentUrl, setExpenseAttachmentUrl] = useState<string | null>(
@@ -156,6 +166,7 @@ function FundManager({ session }: { session: Session }) {
     [flats, setFlats] = useState<Flat[]>([]),
     [collections, setCollections] = useState<Collection[]>([]),
     [expenses, setExpenses] = useState<Expense[]>([]),
+    [sponsors, setSponsors] = useState<Sponsor[]>([]),
     [festival, setFestival] = useState<any>(null),
     [categories, setCategories] = useState<{ id: string; name: string }[]>([]),
     [role, setRole] = useState("VIEWER"),
@@ -178,7 +189,7 @@ function FundManager({ session }: { session: Session }) {
     }
     setFestival(f);
     setOpening(Number(f.opening_balance));
-    const [flatRes, colRes, expRes, catRes, profileRes] = await Promise.all([
+    const [flatRes, colRes, expRes, catRes, sponsorRes, profileRes] = await Promise.all([
       supabase
         .from("flats")
         .select("*")
@@ -201,12 +212,18 @@ function FundManager({ session }: { session: Session }) {
         .eq("active", true)
         .order("name"),
       supabase
+        .from("sponsors")
+        .select("*, flats(flat_number,resident_name)")
+        .eq("festival_id", f.id)
+        .order("sponsor_date", { ascending: false })
+        .order("created_at", { ascending: false }),
+      supabase
         .from("profiles")
         .select("role")
         .eq("user_id", session.user.id)
         .single(),
     ]);
-    if (flatRes.error || colRes.error || expRes.error || catRes.error) {
+    if (flatRes.error || colRes.error || expRes.error || catRes.error || sponsorRes.error) {
       setError(
         "Could not load financial records. Please refresh or check your permissions.",
       );
@@ -251,6 +268,16 @@ function FundManager({ session }: { session: Session }) {
         })),
       );
       setCategories(catRes.data ?? []);
+      setSponsors(
+        (sponsorRes.data ?? []).map((x: any) => ({
+          id: x.id,
+          flatId: x.flat_id,
+          flat: x.flats?.flat_number || "-",
+          resident: x.flats?.resident_name || "Resident not added",
+          sponsorFor: x.sponsor_for,
+          date: x.sponsor_date,
+        })),
+      );
       setRole(profileRes.data?.role || "VIEWER");
     }
     setLoading(false);
@@ -612,8 +639,18 @@ function FundManager({ session }: { session: Session }) {
       return alert(
         "Donation Type setup is pending. Apply the latest Supabase migration, then try again.",
       );
-    if (dbError || !data)
-      return alert("Donation could not be saved. Please try again.");
+    if (dbError?.code === "42501")
+      return alert("Your account does not have permission to record donations. Ask an administrator to assign the Collector or Admin role.");
+    if (dbError?.code === "23514")
+      return alert(`Donation could not be saved: ${dbError.message}`);
+    if (dbError || !data) {
+      console.error("Donation save failed", dbError);
+      return alert(
+        dbError
+          ? `Donation could not be saved: ${dbError.message}`
+          : "Donation could not be saved. Please refresh and try again.",
+      );
+    }
     const c: Collection = {
       id: data.id,
       receipt: data.receipt_number,
@@ -629,6 +666,37 @@ function FundManager({ session }: { session: Session }) {
     setCollections((x) => [c, ...x]);
     setReceipt(c);
     setModal("receipt");
+  };
+  const editCollection = (item: Collection) => {
+    if (role !== "ADMIN") return alert("Only administrators may edit donations.");
+    if (item.status !== "ACTIVE") return alert("Voided donations cannot be edited.");
+    setEditingCollection(item);
+    setModal("collectionEdit");
+  };
+  const saveCollectionEdit = async (fd: FormData) => {
+    if (!editingCollection || role !== "ADMIN")
+      return alert("Only administrators may edit donations.");
+    const amount = Number(fd.get("amount"));
+    const mode = String(fd.get("mode"));
+    if (!amount || amount < 1)
+      return alert("Enter an amount greater than zero.");
+    if (saving || !confirm("Update this donation amount and payment mode?")) return;
+    setSaving(true);
+    const { error: dbError } = await supabase
+      .from("fund_collections")
+      .update({ amount, payment_mode: mode })
+      .eq("id", editingCollection.id)
+      .eq("status", "ACTIVE");
+    setSaving(false);
+    if (dbError)
+      return alert(`Donation could not be updated: ${dbError.message}`);
+    setCollections((items) =>
+      items.map((item) =>
+        item.id === editingCollection.id ? { ...item, amount, mode } : item,
+      ),
+    );
+    setEditingCollection(null);
+    setModal("");
   };
   const closeExpenseModal = () => {
     setModal("");
@@ -725,6 +793,69 @@ function FundManager({ session }: { session: Session }) {
       return alert("The attached bill could not be opened.");
     setExpenseAttachmentUrl(data.signedUrl);
   };
+  const closeSponsorModal = () => {
+    setEditingSponsor(null);
+    setModal("");
+  };
+  const saveSponsor = async (fd: FormData) => {
+    if (!festival || role !== "ADMIN")
+      return alert("Only administrators may manage sponsors.");
+    const flatId = String(fd.get("flatId"));
+    const sponsorFor = String(fd.get("sponsorFor")).trim();
+    const sponsorDate = String(fd.get("date"));
+    const flat = flats.find((item) => item.id === flatId);
+    if (!flat || !sponsorFor || !sponsorDate)
+      return alert("Select a flat and complete the sponsor details.");
+    if (saving || !confirm(editingSponsor ? "Update this sponsor?" : "Add this sponsor?"))
+      return;
+    const values = {
+      flat_id: flat.id,
+      sponsor_for: sponsorFor,
+      sponsor_date: sponsorDate,
+    };
+    setSaving(true);
+    const result = editingSponsor
+      ? await supabase
+          .from("sponsors")
+          .update(values)
+          .eq("id", editingSponsor.id)
+          .select("*, flats(flat_number,resident_name)")
+          .single()
+      : await supabase
+          .from("sponsors")
+          .insert({ festival_id: festival.id, ...values, created_by: session.user.id })
+          .select("*, flats(flat_number,resident_name)")
+          .single();
+    setSaving(false);
+    if (result.error || !result.data)
+      return alert(`Sponsor could not be saved: ${result.error?.message || "Please try again."}`);
+    const saved: Sponsor = {
+      id: result.data.id,
+      flatId: result.data.flat_id,
+      flat: result.data.flats?.flat_number || flat.number,
+      resident: result.data.flats?.resident_name || flat.resident,
+      sponsorFor: result.data.sponsor_for,
+      date: result.data.sponsor_date,
+    };
+    setSponsors((items) =>
+      editingSponsor
+        ? items.map((item) => (item.id === saved.id ? saved : item))
+        : [saved, ...items],
+    );
+    closeSponsorModal();
+  };
+  const editSponsor = (item: Sponsor) => {
+    if (role !== "ADMIN") return alert("Only administrators may manage sponsors.");
+    setEditingSponsor(item);
+    setModal("sponsor");
+  };
+  const deleteSponsor = async (item: Sponsor) => {
+    if (role !== "ADMIN") return alert("Only administrators may manage sponsors.");
+    if (!confirm(`Delete the sponsor entry for ${item.flat}?`)) return;
+    const { error: dbError } = await supabase.from("sponsors").delete().eq("id", item.id);
+    if (dbError) return alert(`Sponsor could not be deleted: ${dbError.message}`);
+    setSponsors((items) => items.filter((sponsor) => sponsor.id !== item.id));
+  };
   const editExpense = (item: Expense) => {
     if (item.status !== "ACTIVE") return alert("Voided expenses cannot be edited.");
     setEditingExpense(item);
@@ -780,6 +911,7 @@ function FundManager({ session }: { session: Session }) {
     "Dashboard",
     "Flats",
     "Donations",
+    "Sponsors",
     "Expenses",
     "Reports",
     "Settings",
@@ -1045,6 +1177,11 @@ function FundManager({ session }: { session: Session }) {
                         Receipt
                       </button>
                       {c.status === "ACTIVE" && role === "ADMIN" && (
+                        <button className="link" onClick={() => editCollection(c)}>
+                          Edit
+                        </button>
+                      )}
+                      {c.status === "ACTIVE" && role === "ADMIN" && (
                         <button
                           className="link danger"
                           onClick={() => voidItem("c", c.id)}
@@ -1055,6 +1192,42 @@ function FundManager({ session }: { session: Session }) {
                     </td>
                   </tr>
                 ))}
+              </>
+            </Table>
+          </section>
+        )}
+        {page === "Sponsors" && (
+          <section>
+            <Top
+              title="Sponsors"
+              description="Record flats and residents sponsoring festival activities."
+              action={role === "ADMIN" ? "+ Add Sponsor" : ""}
+              onClick={() => {
+                setEditingSponsor(null);
+                setModal("sponsor");
+              }}
+            />
+            <Table headers={["Date", "Flat", "Resident", "Sponsor For", "Actions"]}>
+              <>
+                {sponsors.map((sponsor) => (
+                  <tr key={sponsor.id}>
+                    <td>{date(sponsor.date)}</td>
+                    <td><b>{displayFlatNumber(sponsor.flat)}</b></td>
+                    <td>{sponsor.resident}</td>
+                    <td>{sponsor.sponsorFor}</td>
+                    <td>
+                      {role === "ADMIN" && (
+                        <>
+                          <button className="link" onClick={() => editSponsor(sponsor)}>Edit</button>
+                          <button className="link danger" onClick={() => void deleteSponsor(sponsor)}>Delete</button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {!sponsors.length && (
+                  <tr><td colSpan={5}>No sponsors have been added.</td></tr>
+                )}
               </>
             </Table>
           </section>
@@ -1191,6 +1364,26 @@ function FundManager({ session }: { session: Session }) {
           flats={flats}
           close={() => setModal("")}
           save={saveCollection}
+          saving={saving}
+        />
+      )}{" "}
+      {modal === "collectionEdit" && editingCollection && (
+        <CollectionEditForm
+          collection={editingCollection}
+          close={() => {
+            setEditingCollection(null);
+            setModal("");
+          }}
+          save={saveCollectionEdit}
+          saving={saving}
+        />
+      )}{" "}
+      {modal === "sponsor" && (
+        <SponsorForm
+          flats={flats}
+          sponsor={editingSponsor}
+          close={closeSponsorModal}
+          save={saveSponsor}
           saving={saving}
         />
       )}{" "}
@@ -1609,6 +1802,92 @@ function CollectionForm({ flats, close, save, saving }: any) {
         <Actions
           close={close}
           text={saving ? "Saving…" : "Confirm & create receipt"}
+          disabled={saving}
+        />
+      </form>
+    </Modal>
+  );
+}
+function CollectionEditForm({ collection, close, save, saving }: any) {
+  return (
+    <Modal title="Edit donation" close={close}>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void save(new FormData(event.currentTarget));
+        }}
+      >
+        <div className="expenseDetails">
+          <Line a="Receipt no." b={collection.receipt} />
+          <Line a="Flat" b={collection.flat} />
+          <Line a="Resident" b={collection.resident} />
+          <Line a="Donation type" b={collection.donationType} />
+        </div>
+        <label>
+          Amount (INR)
+          <input
+            name="amount"
+            type="number"
+            min="1"
+            defaultValue={collection.amount}
+            required
+          />
+        </label>
+        <label>
+          Payment mode
+          <select name="mode" defaultValue={collection.mode}>
+            <option>UPI</option>
+            <option>CASH</option>
+            <option>BANK_TRANSFER</option>
+            <option>OTHER</option>
+          </select>
+        </label>
+        <Actions
+          close={close}
+          text={saving ? "Saving..." : "Save changes"}
+          disabled={saving}
+        />
+      </form>
+    </Modal>
+  );
+}
+function SponsorForm({ flats, sponsor, close, save, saving }: any) {
+  const [flatId, setFlatId] = useState(sponsor?.flatId || "");
+  const selectedFlat = flats.find((flat: Flat) => flat.id === flatId);
+  return (
+    <Modal title={sponsor ? "Edit sponsor" : "Add sponsor"} close={close}>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void save(new FormData(event.currentTarget));
+        }}
+      >
+        <label>
+          Select Flat Number
+          <select name="flatId" value={flatId} onChange={(event) => setFlatId(event.target.value)} required>
+            <option value="">Select flat</option>
+            {flats.map((flat: Flat) => (
+              <option value={flat.id} key={flat.id}>
+                {flat.number} - {flat.resident}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Resident Name
+          <input value={selectedFlat?.resident || "Select a flat to fetch the resident"} readOnly />
+        </label>
+        <label>
+          Sponsor For
+          <input name="sponsorFor" defaultValue={sponsor?.sponsorFor || ""} required />
+        </label>
+        <label>
+          Date
+          <input name="date" type="date" max={today} defaultValue={sponsor?.date || today} required />
+        </label>
+        <Actions
+          close={close}
+          text={saving ? "Saving..." : sponsor ? "Save changes" : "Add sponsor"}
           disabled={saving}
         />
       </form>
