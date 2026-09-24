@@ -46,6 +46,15 @@ type Sponsor = {
   sponsorFor: string;
   date: string;
 };
+type Auction = {
+  id: string;
+  flatId: string;
+  flat: string;
+  resident: string;
+  item: string;
+  winningPrice: number;
+  date: string;
+};
 type SortState = { key: string; direction: "asc" | "desc" };
 type TableHeader = { label: string; sortKey?: string };
 const money = (n: number) =>
@@ -153,6 +162,7 @@ function FundManager({ session }: { session: Session }) {
     [receipt, setReceipt] = useState<Collection | null>(null),
     [editingCollection, setEditingCollection] = useState<Collection | null>(null),
     [editingSponsor, setEditingSponsor] = useState<Sponsor | null>(null),
+    [editingAuction, setEditingAuction] = useState<Auction | null>(null),
     [selectedExpense, setSelectedExpense] = useState<Expense | null>(null),
     [editingExpense, setEditingExpense] = useState<Expense | null>(null),
     [expenseAttachmentUrl, setExpenseAttachmentUrl] = useState<string | null>(
@@ -167,6 +177,7 @@ function FundManager({ session }: { session: Session }) {
     [collections, setCollections] = useState<Collection[]>([]),
     [expenses, setExpenses] = useState<Expense[]>([]),
     [sponsors, setSponsors] = useState<Sponsor[]>([]),
+    [auctions, setAuctions] = useState<Auction[]>([]),
     [festival, setFestival] = useState<any>(null),
     [categories, setCategories] = useState<{ id: string; name: string }[]>([]),
     [role, setRole] = useState("VIEWER"),
@@ -189,7 +200,7 @@ function FundManager({ session }: { session: Session }) {
     }
     setFestival(f);
     setOpening(Number(f.opening_balance));
-    const [flatRes, colRes, expRes, catRes, sponsorRes, profileRes] = await Promise.all([
+    const [flatRes, colRes, expRes, catRes, sponsorRes, auctionRes, profileRes] = await Promise.all([
       supabase
         .from("flats")
         .select("*")
@@ -215,15 +226,19 @@ function FundManager({ session }: { session: Session }) {
         .from("sponsors")
         .select("*, flats(flat_number,resident_name)")
         .eq("festival_id", f.id)
-        .order("sponsor_date", { ascending: false })
-        .order("created_at", { ascending: false }),
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("auctions")
+        .select("*, flats(flat_number,resident_name)")
+        .eq("festival_id", f.id)
+        .order("created_at", { ascending: true }),
       supabase
         .from("profiles")
         .select("role")
         .eq("user_id", session.user.id)
         .single(),
     ]);
-    if (flatRes.error || colRes.error || expRes.error || catRes.error || sponsorRes.error) {
+    if (flatRes.error || colRes.error || expRes.error || catRes.error || sponsorRes.error || auctionRes.error) {
       setError(
         "Could not load financial records. Please refresh or check your permissions.",
       );
@@ -276,6 +291,17 @@ function FundManager({ session }: { session: Session }) {
           resident: x.flats?.resident_name || "Resident not added",
           sponsorFor: x.sponsor_for,
           date: x.sponsor_date,
+        })),
+      );
+      setAuctions(
+        (auctionRes.data ?? []).map((x: any) => ({
+          id: x.id,
+          flatId: x.flat_id,
+          flat: x.flats?.flat_number || "-",
+          resident: x.flats?.resident_name || "Resident not added",
+          item: x.item,
+          winningPrice: Number(x.winning_price),
+          date: x.auction_date,
         })),
       );
       setRole(profileRes.data?.role || "VIEWER");
@@ -527,7 +553,8 @@ function FundManager({ session }: { session: Session }) {
     const sponsorRows = [...sponsors]
       .sort((a, b) => b.date.localeCompare(a.date) || a.flat.localeCompare(b.flat, undefined, { numeric: true }))
       .map(
-        (item) => `<tr>
+        (item, index) => `<tr>
+          <td>${index + 1}</td>
           <td>${escapeHtml(date(item.date))}</td>
           <td>${escapeHtml(displayFlatNumber(item.flat))}</td>
           <td>${escapeHtml(item.resident)}</td>
@@ -598,8 +625,8 @@ function FundManager({ session }: { session: Session }) {
       <table class="donations"><colgroup><col class="receipt" /><col class="date" /><col class="flat" /><col class="resident" /><col class="type" /><col class="amount-col" /><col class="mode" /></colgroup><thead><tr><th>Receipt No.</th><th>Date</th><th>Flat</th><th>Resident</th><th>Type</th><th>Amount</th><th>Mode</th></tr></thead>
       <tbody>${donationRows || '<tr><td colspan="7">No active donations recorded.</td></tr>'}</tbody></table>
       <h2>Sponsors</h2>
-      <table><thead><tr><th>Date</th><th>Flat No.</th><th>Resident</th><th>Sponsor For</th></tr></thead>
-      <tbody>${sponsorRows || '<tr><td colspan="4">No sponsors have been added.</td></tr>'}</tbody></table>
+      <table><thead><tr><th>S. No.</th><th>Date</th><th>Flat No.</th><th>Resident</th><th>Sponsor For</th></tr></thead>
+      <tbody>${sponsorRows || '<tr><td colspan="5">No sponsors have been added.</td></tr>'}</tbody></table>
       <h2>Expenses (Date: ascending)</h2>
       <table><thead><tr><th>Expense No.</th><th>Date</th><th>Category</th><th>Description</th><th>Paid to</th><th>Amount</th><th>Mode</th><th>Bill</th></tr></thead>
       <tbody>${expenseRows || '<tr><td colspan="8">No active expenses recorded.</td></tr>'}</tbody></table>
@@ -861,7 +888,7 @@ function FundManager({ session }: { session: Session }) {
     setSponsors((items) =>
       editingSponsor
         ? items.map((item) => (item.id === saved.id ? saved : item))
-        : [saved, ...items],
+        : [...items, saved],
     );
     closeSponsorModal();
   };
@@ -876,6 +903,72 @@ function FundManager({ session }: { session: Session }) {
     const { error: dbError } = await supabase.from("sponsors").delete().eq("id", item.id);
     if (dbError) return alert(`Sponsor could not be deleted: ${dbError.message}`);
     setSponsors((items) => items.filter((sponsor) => sponsor.id !== item.id));
+  };
+  const closeAuctionModal = () => {
+    setEditingAuction(null);
+    setModal("");
+  };
+  const saveAuction = async (fd: FormData) => {
+    if (!festival || role !== "ADMIN")
+      return alert("Only administrators may manage auctions.");
+    const flatId = String(fd.get("flatId"));
+    const item = String(fd.get("item")).trim();
+    const winningPrice = Number(fd.get("winningPrice"));
+    const auctionDate = String(fd.get("date"));
+    const flat = flats.find((entry) => entry.id === flatId);
+    if (!flat || !item || !winningPrice || winningPrice < 1 || !auctionDate)
+      return alert("Select a flat and complete the auction details.");
+    if (saving || !confirm(editingAuction ? "Update this auction?" : "Add this auction?"))
+      return;
+    const values = {
+      flat_id: flat.id,
+      item,
+      winning_price: winningPrice,
+      auction_date: auctionDate,
+    };
+    setSaving(true);
+    const result = editingAuction
+      ? await supabase
+          .from("auctions")
+          .update(values)
+          .eq("id", editingAuction.id)
+          .select("*, flats(flat_number,resident_name)")
+          .single()
+      : await supabase
+          .from("auctions")
+          .insert({ festival_id: festival.id, ...values, created_by: session.user.id })
+          .select("*, flats(flat_number,resident_name)")
+          .single();
+    setSaving(false);
+    if (result.error || !result.data)
+      return alert(`Auction could not be saved: ${result.error?.message || "Please try again."}`);
+    const saved: Auction = {
+      id: result.data.id,
+      flatId: result.data.flat_id,
+      flat: result.data.flats?.flat_number || flat.number,
+      resident: result.data.flats?.resident_name || flat.resident,
+      item: result.data.item,
+      winningPrice: Number(result.data.winning_price),
+      date: result.data.auction_date,
+    };
+    setAuctions((items) =>
+      editingAuction
+        ? items.map((entry) => (entry.id === saved.id ? saved : entry))
+        : [...items, saved],
+    );
+    closeAuctionModal();
+  };
+  const editAuction = (item: Auction) => {
+    if (role !== "ADMIN") return alert("Only administrators may manage auctions.");
+    setEditingAuction(item);
+    setModal("auction");
+  };
+  const deleteAuction = async (item: Auction) => {
+    if (role !== "ADMIN") return alert("Only administrators may manage auctions.");
+    if (!confirm(`Delete the auction entry for ${item.item}?`)) return;
+    const { error: dbError } = await supabase.from("auctions").delete().eq("id", item.id);
+    if (dbError) return alert(`Auction could not be deleted: ${dbError.message}`);
+    setAuctions((items) => items.filter((auction) => auction.id !== item.id));
   };
   const editExpense = (item: Expense) => {
     if (item.status !== "ACTIVE") return alert("Voided expenses cannot be edited.");
@@ -933,6 +1026,7 @@ function FundManager({ session }: { session: Session }) {
     "Flats",
     "Donations",
     "Sponsors",
+    "Auctions",
     "Expenses",
     "Reports",
     "Settings",
@@ -1252,6 +1346,42 @@ function FundManager({ session }: { session: Session }) {
             </Table>
           </section>
         )}
+        {page === "Auctions" && (
+          <section>
+            <Top
+              title="Auctions"
+              description="Record auction items and their winning bids."
+              action={role === "ADMIN" ? "+ Add Auction" : ""}
+              onClick={() => {
+                setEditingAuction(null);
+                setModal("auction");
+              }}
+            />
+            <Table headers={role === "ADMIN" ? ["S. No.", "Auction Date", "Flat No.", "Resident", "Item", "Winning Price", "Actions"] : ["S. No.", "Auction Date", "Flat No.", "Resident", "Item", "Winning Price"]}>
+              <>
+                {auctions.map((auction, index) => (
+                  <tr key={auction.id}>
+                    <td>{index + 1}</td>
+                    <td>{date(auction.date)}</td>
+                    <td><b>{displayFlatNumber(auction.flat)}</b></td>
+                    <td>{auction.resident}</td>
+                    <td>{auction.item}</td>
+                    <td>{money(auction.winningPrice)}</td>
+                    {role === "ADMIN" && (
+                      <td>
+                        <button className="link" onClick={() => editAuction(auction)}>Edit</button>
+                        <button className="link danger" onClick={() => void deleteAuction(auction)}>Delete</button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+                {!auctions.length && (
+                  <tr><td colSpan={role === "ADMIN" ? 7 : 6}>No auctions have been added.</td></tr>
+                )}
+              </>
+            </Table>
+          </section>
+        )}
         {page === "Expenses" && (
           <section>
             <Top
@@ -1404,6 +1534,15 @@ function FundManager({ session }: { session: Session }) {
           sponsor={editingSponsor}
           close={closeSponsorModal}
           save={saveSponsor}
+          saving={saving}
+        />
+      )}{" "}
+      {modal === "auction" && (
+        <AuctionForm
+          flats={flats}
+          auction={editingAuction}
+          close={closeAuctionModal}
+          save={saveAuction}
           saving={saving}
         />
       )}{" "}
@@ -1908,6 +2047,55 @@ function SponsorForm({ flats, sponsor, close, save, saving }: any) {
         <Actions
           close={close}
           text={saving ? "Saving..." : sponsor ? "Save changes" : "Add sponsor"}
+          disabled={saving}
+        />
+      </form>
+    </Modal>
+  );
+}
+function AuctionForm({ flats, auction, close, save, saving }: any) {
+  const [flatId, setFlatId] = useState(auction?.flatId || "");
+  const selectedFlat = flats.find((flat: Flat) => flat.id === flatId);
+  return (
+    <Modal title={auction ? "Edit auction" : "Add auction"} close={close}>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void save(new FormData(event.currentTarget));
+        }}
+      >
+        <label>
+          Flat No.
+          <select name="flatId" value={flatId} onChange={(event) => setFlatId(event.target.value)} required>
+            <option value="">Select flat</option>
+            {flats.map((flat: Flat) => (
+              <option value={flat.id} key={flat.id}>
+                {flat.number} - {flat.resident}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Resident
+          <input value={selectedFlat?.resident || "Select a flat to fetch the resident"} readOnly />
+        </label>
+        <label>
+          Item
+          <input name="item" defaultValue={auction?.item || ""} required />
+        </label>
+        <div className="formgrid">
+          <label>
+            Winning Price (INR)
+            <input name="winningPrice" type="number" min="1" defaultValue={auction?.winningPrice || ""} required />
+          </label>
+          <label>
+            Auction Date
+            <input name="date" type="date" max={today} defaultValue={auction?.date || today} required />
+          </label>
+        </div>
+        <Actions
+          close={close}
+          text={saving ? "Saving..." : auction ? "Save changes" : "Add auction"}
           disabled={saving}
         />
       </form>
