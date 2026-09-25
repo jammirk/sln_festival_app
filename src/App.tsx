@@ -445,6 +445,110 @@ function FundManager({ session }: { session: Session }) {
     addSheet("Summary", summarySheet);
     XLSX.writeFile(workbook, `ganesh-festival-${festival?.year || "report"}-export.xlsx`);
   };
+  const exportSheet = (
+    sheetName: string,
+    data: Record<string, unknown>[],
+    filename: string,
+  ) => {
+    const workbook = XLSX.utils.book_new();
+    const sheet = XLSX.utils.json_to_sheet(data);
+    sheet["!cols"] = Object.keys(data[0] || {}).map((heading) => ({
+      wch: Math.max(14, heading.length + 2),
+    }));
+    XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
+    XLSX.writeFile(workbook, filename);
+  };
+  const exportTablePdf = (
+    title: string,
+    description: string,
+    headers: string[],
+    rows: string,
+    emptyMessage: string,
+  ) => {
+    const reportWindow = window.open("", "_blank");
+    if (!reportWindow)
+      return alert("Allow pop-ups for this site to export the PDF report.");
+    reportWindow.addEventListener(
+      "load",
+      () => {
+        reportWindow.focus();
+        reportWindow.print();
+      },
+      { once: true },
+    );
+    reportWindow.document.open();
+    reportWindow.document.write(`<!doctype html>
+      <html lang="en"><head><meta charset="UTF-8" />
+      <title>${escapeHtml(festival?.name || "Festival")} - ${escapeHtml(title)}</title>
+      <style>
+        @page { size: A4 landscape; margin: 18mm 12mm; }
+        * { box-sizing: border-box; } body { color: #1f2d27; font: 11px Arial, sans-serif; margin: 0; }
+        h1 { font-size: 20px; margin: 0 0 5px; } p { margin: 0; } .subtitle { color: #5f6f66; }
+        table { border-collapse: collapse; margin-top: 18px; width: 100%; } tr { break-inside: avoid; page-break-inside: avoid; }
+        th { background: #7b2d26; color: #fff; font-size: 9px; letter-spacing: .05em; text-align: left; text-transform: uppercase; }
+        th, td { border: 1px solid #dce3de; padding: 7px; vertical-align: top; } td.amount { text-align: right; white-space: nowrap; }
+        .empty { color: #4e6056; margin-top: 18px; } footer { border-top: 1px solid #dce3de; color: #4e6056; font-size: 10px; font-weight: bold; margin-top: 22px; padding-top: 8px; text-align: center; }
+      </style></head><body>
+      <h1>${escapeHtml(festival?.name || "Festival")} - ${escapeHtml(title)}</h1>
+      <p class="subtitle">${escapeHtml(description)} Generated on ${escapeHtml(date(today))}.</p>
+      ${rows ? `<table><thead><tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table>` : `<p class="empty">${escapeHtml(emptyMessage)}</p>`}
+      <footer>SLN URBANA OWNERS WELFARE ASSOCIATION - ALWAL</footer>
+      </body></html>`);
+    reportWindow.document.close();
+  };
+  const exportDonationsExcel = () =>
+    exportSheet(
+      "Donations",
+      visibleCollections.map((item) => ({
+        "Receipt No.": item.receipt,
+        Date: date(item.date),
+        "Flat No.": displayFlatNumber(item.flat),
+        "Resident Name": item.resident,
+        "Donation Type": item.donationType,
+        Amount: item.amount,
+        "Payment Mode": item.mode,
+      })),
+      `ganesh-festival-${festival?.year || "report"}-donations.xlsx`,
+    );
+  const exportDonationsPdf = () =>
+    exportTablePdf(
+      "Donations",
+      `${visibleCollections.length} active donation${visibleCollections.length === 1 ? "" : "s"} shown.`,
+      ["Receipt No.", "Date", "Flat No.", "Resident", "Donation Type", "Amount", "Mode"],
+      visibleCollections
+        .map(
+          (item) => `<tr><td>${escapeHtml(item.receipt)}</td><td>${escapeHtml(date(item.date))}</td><td>${escapeHtml(displayFlatNumber(item.flat))}</td><td>${escapeHtml(item.resident)}</td><td>${escapeHtml(item.donationType)}</td><td class="amount">${escapeHtml(money(item.amount))}</td><td>${escapeHtml(item.mode)}</td></tr>`,
+        )
+        .join(""),
+      "No active donations match the current view.",
+    );
+  const exportExpensesExcel = () =>
+    exportSheet(
+      "Expenses",
+      visibleExpenses.map((item) => ({
+        "Expense No.": item.number,
+        Date: date(item.date),
+        Category: item.category,
+        Description: item.description,
+        "Paid To": item.paidTo,
+        Amount: item.amount,
+        "Payment Mode": item.mode,
+        Status: item.status,
+      })),
+      `ganesh-festival-${festival?.year || "report"}-expenses.xlsx`,
+    );
+  const exportExpensesPdf = () =>
+    exportTablePdf(
+      "Expenses",
+      `${visibleExpenses.length} expense${visibleExpenses.length === 1 ? "" : "s"} shown.`,
+      ["Expense No.", "Date", "Category", "Description", "Paid To", "Amount", "Mode", "Status"],
+      visibleExpenses
+        .map(
+          (item) => `<tr><td>${escapeHtml(item.number)}</td><td>${escapeHtml(date(item.date))}</td><td>${escapeHtml(item.category)}</td><td>${escapeHtml(item.description)}</td><td>${escapeHtml(item.paidTo)}</td><td class="amount">${escapeHtml(money(item.amount))}</td><td>${escapeHtml(item.mode)}</td><td>${escapeHtml(item.status)}</td></tr>`,
+        )
+        .join(""),
+      "No expenses match the current view.",
+    );
   const exportOutstandingFlatsPdf = () => {
     const reportWindow = window.open("", "_blank");
     if (!reportWindow)
@@ -1291,6 +1395,10 @@ function FundManager({ session }: { session: Session }) {
               <Card t="UPI received" v={money(donationUpi)} />
               <Card t="Cash received" v={money(donationCash)} />
             </div>
+            <div className="exportActions pageExportActions">
+              <button className="muted" onClick={exportDonationsExcel}>Export Excel</button>
+              <button className="muted" onClick={exportDonationsPdf}>Export PDF</button>
+            </div>
             <Filters
               value={collectionSearch}
               onChange={setCollectionSearch}
@@ -1449,6 +1557,10 @@ function FundManager({ session }: { session: Session }) {
               <Card t="Total expenses" v={money(expense)} />
               <Card t="UPI expenses" v={money(expenseUpi)} />
               <Card t="Cash expenses" v={money(expenseCash)} />
+            </div>
+            <div className="exportActions pageExportActions">
+              <button className="muted" onClick={exportExpensesExcel}>Export Excel</button>
+              <button className="muted" onClick={exportExpensesPdf}>Export PDF</button>
             </div>
             <Filters
               value={expenseSearch}
