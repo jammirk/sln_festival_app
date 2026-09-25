@@ -44,6 +44,7 @@ type Sponsor = {
   flat: string;
   resident: string;
   sponsorFor: string;
+  amount: number | null;
   date: string;
 };
 type Auction = {
@@ -290,6 +291,7 @@ function FundManager({ session }: { session: Session }) {
           flat: x.flats?.flat_number || "-",
           resident: x.flats?.resident_name || "Resident not added",
           sponsorFor: x.sponsor_for,
+          amount: x.amount == null ? null : Number(x.amount),
           date: x.sponsor_date,
         })),
       );
@@ -403,6 +405,7 @@ function FundManager({ session }: { session: Session }) {
       "Flat No.": displayFlatNumber(item.flat),
       "Resident Name": item.resident,
       "Sponsor For": item.sponsorFor,
+      Amount: item.amount ?? "",
     }));
     const summarySheet = [
       { Item: "Festival", Value: festival?.name || "" },
@@ -559,6 +562,7 @@ function FundManager({ session }: { session: Session }) {
           <td>${escapeHtml(displayFlatNumber(item.flat))}</td>
           <td>${escapeHtml(item.resident)}</td>
           <td>${escapeHtml(item.sponsorFor)}</td>
+          <td class="amount">${escapeHtml(item.amount == null ? "â€”" : money(item.amount))}</td>
         </tr>`,
       )
       .join("");
@@ -625,8 +629,8 @@ function FundManager({ session }: { session: Session }) {
       <table class="donations"><colgroup><col class="receipt" /><col class="date" /><col class="flat" /><col class="resident" /><col class="type" /><col class="amount-col" /><col class="mode" /></colgroup><thead><tr><th>Receipt No.</th><th>Date</th><th>Flat</th><th>Resident</th><th>Type</th><th>Amount</th><th>Mode</th></tr></thead>
       <tbody>${donationRows || '<tr><td colspan="7">No active donations recorded.</td></tr>'}</tbody></table>
       <h2>Sponsors</h2>
-      <table><thead><tr><th>S. No.</th><th>Date</th><th>Flat No.</th><th>Resident</th><th>Sponsor For</th></tr></thead>
-      <tbody>${sponsorRows || '<tr><td colspan="5">No sponsors have been added.</td></tr>'}</tbody></table>
+      <table><thead><tr><th>S. No.</th><th>Date</th><th>Flat No.</th><th>Resident</th><th>Sponsor For</th><th>Amount</th></tr></thead>
+      <tbody>${sponsorRows || '<tr><td colspan="6">No sponsors have been added.</td></tr>'}</tbody></table>
       <h2>Expenses (Date: ascending)</h2>
       <table><thead><tr><th>Expense No.</th><th>Date</th><th>Category</th><th>Description</th><th>Paid to</th><th>Amount</th><th>Mode</th><th>Bill</th></tr></thead>
       <tbody>${expenseRows || '<tr><td colspan="8">No active expenses recorded.</td></tr>'}</tbody></table>
@@ -851,14 +855,19 @@ function FundManager({ session }: { session: Session }) {
     const flatId = String(fd.get("flatId"));
     const sponsorFor = String(fd.get("sponsorFor")).trim();
     const sponsorDate = String(fd.get("date"));
+    const amountValue = String(fd.get("amount") || "").trim();
+    const amount = amountValue === "" ? null : Number(amountValue);
     const flat = flats.find((item) => item.id === flatId);
     if (!flat || !sponsorFor || !sponsorDate)
       return alert("Select a flat and complete the sponsor details.");
+    if (amount !== null && (!Number.isFinite(amount) || amount <= 0))
+      return alert("Enter an amount greater than zero, or leave it blank.");
     if (saving || !confirm(editingSponsor ? "Update this sponsor?" : "Add this sponsor?"))
       return;
     const values = {
       flat_id: flat.id,
       sponsor_for: sponsorFor,
+      amount,
       sponsor_date: sponsorDate,
     };
     setSaving(true);
@@ -883,6 +892,7 @@ function FundManager({ session }: { session: Session }) {
       flat: result.data.flats?.flat_number || flat.number,
       resident: result.data.flats?.resident_name || flat.resident,
       sponsorFor: result.data.sponsor_for,
+      amount: result.data.amount == null ? null : Number(result.data.amount),
       date: result.data.sponsor_date,
     };
     setSponsors((items) =>
@@ -1322,7 +1332,7 @@ function FundManager({ session }: { session: Session }) {
                 setModal("sponsor");
               }}
             />
-            <Table headers={role === "ADMIN" ? ["S. No.", "Date", "Flat No.", "Resident", "Sponsor For", "Actions"] : ["S. No.", "Date", "Flat No.", "Resident", "Sponsor For"]}>
+            <Table headers={role === "ADMIN" ? ["S. No.", "Date", "Flat No.", "Resident", "Sponsor For", "Amount", "Actions"] : ["S. No.", "Date", "Flat No.", "Resident", "Sponsor For", "Amount"]}>
               <>
                 {sponsors.map((sponsor, index) => (
                   <tr key={sponsor.id}>
@@ -1331,6 +1341,7 @@ function FundManager({ session }: { session: Session }) {
                     <td><b>{displayFlatNumber(sponsor.flat)}</b></td>
                     <td>{sponsor.resident}</td>
                     <td>{sponsor.sponsorFor}</td>
+                    <td>{sponsor.amount == null ? "â€”" : money(sponsor.amount)}</td>
                     {role === "ADMIN" && (
                       <td>
                         <button className="link" onClick={() => editSponsor(sponsor)}>Edit</button>
@@ -1340,7 +1351,7 @@ function FundManager({ session }: { session: Session }) {
                   </tr>
                 ))}
                 {!sponsors.length && (
-                  <tr><td colSpan={role === "ADMIN" ? 6 : 5}>No sponsors have been added.</td></tr>
+                  <tr><td colSpan={role === "ADMIN" ? 7 : 6}>No sponsors have been added.</td></tr>
                 )}
               </>
             </Table>
@@ -2039,6 +2050,10 @@ function SponsorForm({ flats, sponsor, close, save, saving }: any) {
         <label>
           Sponsor For
           <input name="sponsorFor" defaultValue={sponsor?.sponsorFor || ""} required />
+        </label>
+        <label>
+          Amount (INR)
+          <input name="amount" type="number" min="0.01" step="0.01" defaultValue={sponsor?.amount ?? ""} />
         </label>
         <label>
           Date
