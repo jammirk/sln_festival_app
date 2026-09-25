@@ -319,13 +319,25 @@ function FundManager({ session }: { session: Session }) {
       active = false;
     };
   }, [load]);
-  const income = collections
-      .filter((x) => x.status === "ACTIVE")
-      .reduce((s, x) => s + x.amount, 0),
-    expense = expenses
-      .filter((x) => x.status === "ACTIVE")
-      .reduce((s, x) => s + x.amount, 0),
-    balance = opening + income - expense;
+  const activeCollections = collections.filter((item) => item.status === "ACTIVE"),
+    activeExpenses = expenses.filter((item) => item.status === "ACTIVE"),
+    income = activeCollections.reduce((sum, item) => sum + item.amount, 0),
+    donationUpi = activeCollections
+      .filter((item) => item.mode === "UPI")
+      .reduce((sum, item) => sum + item.amount, 0),
+    donationCash = activeCollections
+      .filter((item) => item.mode === "CASH")
+      .reduce((sum, item) => sum + item.amount, 0),
+    expense = activeExpenses.reduce((sum, item) => sum + item.amount, 0),
+    expenseUpi = activeExpenses
+      .filter((item) => item.mode === "UPI")
+      .reduce((sum, item) => sum + item.amount, 0),
+    expenseCash = activeExpenses
+      .filter((item) => item.mode === "CASH")
+      .reduce((sum, item) => sum + item.amount, 0),
+    sponsorAmount = sponsors.reduce((sum, item) => sum + (item.amount ?? 0), 0),
+    auctionAmount = auctions.reduce((sum, item) => sum + item.winningPrice, 0),
+    balance = opening + income + sponsorAmount + auctionAmount - expense;
   const visibleCollections = sortRows(
     collections
       .filter((collection) => collection.status === "ACTIVE")
@@ -553,6 +565,19 @@ function FundManager({ session }: { session: Session }) {
         </tr>`,
       )
       .join("");
+    const auctionRows = [...auctions]
+      .sort((a, b) => a.date.localeCompare(b.date) || a.flat.localeCompare(b.flat, undefined, { numeric: true }))
+      .map(
+        (item, index) => `<tr>
+          <td>${index + 1}</td>
+          <td>${escapeHtml(date(item.date))}</td>
+          <td>${escapeHtml(displayFlatNumber(item.flat))}</td>
+          <td>${escapeHtml(item.resident)}</td>
+          <td>${escapeHtml(item.item)}</td>
+          <td class="amount">${escapeHtml(money(item.winningPrice))}</td>
+        </tr>`,
+      )
+      .join("");
     const sponsorRows = [...sponsors]
       .sort((a, b) => b.date.localeCompare(a.date) || a.flat.localeCompare(b.flat, undefined, { numeric: true }))
       .map(
@@ -599,7 +624,7 @@ function FundManager({ session }: { session: Session }) {
         body { color: #1f2d27; font: 11px Arial, sans-serif; margin: 0; }
         h1 { font-size: 21px; margin: 0 0 4px; } h2 { font-size: 15px; margin: 25px 0 9px; }
         .subtitle { color: #5f6f66; margin: 0; } .generated { color: #5f6f66; font-size: 10px; margin-top: 4px; }
-        .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 18px 0; }
+        .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 18px 0; }
         .summary div { background: #f7f1ee; border: 1px solid #eadbd4; border-radius: 5px; padding: 10px; }
         .summary span { color: #6b584e; display: block; font-size: 10px; } .summary b { display: block; font-size: 16px; margin-top: 5px; }
         table { border-collapse: collapse; page-break-inside: auto; width: 100%; }
@@ -622,7 +647,9 @@ function FundManager({ session }: { session: Session }) {
       <section class="summary">
         <div><span>Opening balance</span><b>${escapeHtml(money(opening))}</b></div>
         <div><span>Donations received</span><b>${escapeHtml(money(income))}</b></div>
+        <div><span>Sponsor amount received</span><b>${escapeHtml(money(sponsorAmount))}</b></div>
         <div><span>Total expenses</span><b>${escapeHtml(money(expense))}</b></div>
+        <div><span>Auction amount received</span><b>${escapeHtml(money(auctionAmount))}</b></div>
         <div><span>Closing balance</span><b>${escapeHtml(money(balance))}</b></div>
       </section>
       <h2>Donations (Flat Number: ascending)</h2>
@@ -634,6 +661,9 @@ function FundManager({ session }: { session: Session }) {
       <h2>Expenses (Date: ascending)</h2>
       <table><thead><tr><th>Expense No.</th><th>Date</th><th>Category</th><th>Description</th><th>Paid to</th><th>Amount</th><th>Mode</th><th>Bill</th></tr></thead>
       <tbody>${expenseRows || '<tr><td colspan="8">No active expenses recorded.</td></tr>'}</tbody></table>
+      <h2>Auctions (Date: ascending)</h2>
+      <table><thead><tr><th>S. No.</th><th>Auction Date</th><th>Flat No.</th><th>Resident</th><th>Item</th><th>Winning Price</th></tr></thead>
+      <tbody>${auctionRows || '<tr><td colspan="6">No auctions have been added.</td></tr>'}</tbody></table>
       ${includeBills ? `<section class="bill-pages">
         <h2>Expense bill images</h2>
         ${billImages ? `<div class="bill-grid">${billImages}</div>` : '<p class="note">No image bills have been uploaded.</p>'}
@@ -1256,6 +1286,11 @@ function FundManager({ session }: { session: Session }) {
               action={role !== "VIEWER" ? "+ Add Donation" : ""}
               onClick={() => setModal("collection")}
             />
+            <div className="cards summaryCards">
+              <Card t="Total donations received" v={money(income)} />
+              <Card t="UPI received" v={money(donationUpi)} />
+              <Card t="Cash received" v={money(donationCash)} />
+            </div>
             <Filters
               value={collectionSearch}
               onChange={setCollectionSearch}
@@ -1332,6 +1367,9 @@ function FundManager({ session }: { session: Session }) {
                 setModal("sponsor");
               }}
             />
+            <div className="cards summaryCards">
+              <Card t="Total sponsor amount received" v={money(sponsorAmount)} />
+            </div>
             <Table headers={role === "ADMIN" ? ["S. No.", "Date", "Flat No.", "Resident", "Sponsor For", "Amount", "Actions"] : ["S. No.", "Date", "Flat No.", "Resident", "Sponsor For", "Amount"]}>
               <>
                 {sponsors.map((sponsor, index) => (
@@ -1368,6 +1406,9 @@ function FundManager({ session }: { session: Session }) {
                 setModal("auction");
               }}
             />
+            <div className="cards summaryCards">
+              <Card t="Total auction amount received" v={money(auctionAmount)} />
+            </div>
             <Table headers={role === "ADMIN" ? ["S. No.", "Auction Date", "Flat No.", "Resident", "Item", "Winning Price", "Actions"] : ["S. No.", "Auction Date", "Flat No.", "Resident", "Item", "Winning Price"]}>
               <>
                 {auctions.map((auction, index) => (
@@ -1404,6 +1445,11 @@ function FundManager({ session }: { session: Session }) {
                 setModal("expense");
               }}
             />
+            <div className="cards summaryCards">
+              <Card t="Total expenses" v={money(expense)} />
+              <Card t="UPI expenses" v={money(expenseUpi)} />
+              <Card t="Cash expenses" v={money(expenseCash)} />
+            </div>
             <Filters
               value={expenseSearch}
               onChange={setExpenseSearch}

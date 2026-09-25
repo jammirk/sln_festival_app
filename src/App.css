@@ -153,6 +153,9 @@ header > div:last-child {
   gap: 16px;
   margin-bottom: 20px;
 }
+.summaryCards {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
 .card,
 .panel,
 .settings {
