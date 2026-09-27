@@ -731,6 +731,12 @@ function FundManager({ session }: { session: Session }) {
         .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 18px 0; }
         .summary div { background: #f7f1ee; border: 1px solid #eadbd4; border-radius: 5px; padding: 10px; }
         .summary span { color: #6b584e; display: block; font-size: 10px; } .summary b { display: block; font-size: 16px; margin-top: 5px; }
+        .closing-calculation { background: #f7f1ee; border: 1px solid #eadbd4; border-radius: 5px; margin: 0 0 18px; padding: 12px; }
+        .closing-calculation h2 { margin: 0 0 8px; }
+        .calculation-row { border-top: 1px solid #eadbd4; display: flex; justify-content: space-between; padding: 6px 0; }
+        .calculation-row:first-of-type { border-top: 0; }
+        .calculation-row span { color: #4e6056; }
+        .calculation-row.total { border-top: 2px solid #7b2d26; color: #7b2d26; font-size: 13px; font-weight: 700; margin-top: 3px; padding-top: 8px; }
         table { border-collapse: collapse; page-break-inside: auto; width: 100%; }
         .donations { table-layout: fixed; }
         .donations .receipt { width: 11%; } .donations .date { width: 9%; } .donations .flat { width: 5%; }
@@ -755,6 +761,15 @@ function FundManager({ session }: { session: Session }) {
         <div><span>Total expenses</span><b>${escapeHtml(money(expense))}</b></div>
         <div><span>Auction amount received</span><b>${escapeHtml(money(auctionAmount))}</b></div>
         <div><span>Closing balance</span><b>${escapeHtml(money(balance))}</b></div>
+      </section>
+      <section class="closing-calculation">
+        <h2>Closing balance calculation</h2>
+        <div class="calculation-row"><span>Opening balance</span><b>${escapeHtml(money(opening))}</b></div>
+        <div class="calculation-row"><span>Add: donations received</span><b>+ ${escapeHtml(money(income))}</b></div>
+        <div class="calculation-row"><span>Add: sponsor amount received</span><b>+ ${escapeHtml(money(sponsorAmount))}</b></div>
+        <div class="calculation-row"><span>Add: auction amount received</span><b>+ ${escapeHtml(money(auctionAmount))}</b></div>
+        <div class="calculation-row"><span>Less: total expenses</span><b>− ${escapeHtml(money(expense))}</b></div>
+        <div class="calculation-row total"><span>Closing balance</span><b>${escapeHtml(money(balance))}</b></div>
       </section>
       <h2>Donations (Flat Number: ascending)</h2>
       <table class="donations"><colgroup><col class="receipt" /><col class="date" /><col class="flat" /><col class="resident" /><col class="type" /><col class="amount-col" /><col class="mode" /></colgroup><thead><tr><th>Receipt No.</th><th>Date</th><th>Flat</th><th>Resident</th><th>Type</th><th>Amount</th><th>Mode</th></tr></thead>
