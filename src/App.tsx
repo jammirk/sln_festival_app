@@ -1243,6 +1243,8 @@ function FundManager({ session }: { session: Session }) {
             {...{
               opening,
               income,
+              sponsorAmount,
+              auctionAmount,
               expense,
               balance,
               counts,
@@ -1760,12 +1762,33 @@ function Badge({ s }: { s: string }) {
 function Dashboard(p: any) {
   return (
     <section>
-      <div className="cards">
+      <div className="cards dashboardSummaryCards">
         <Card t="Opening balance" v={money(p.opening)} />
         <Card t="Donations received" v={money(p.income)} />
-        <Card t="Total expenditure" v={money(p.expense)} />
-        <Card t="Current balance" v={money(p.balance)} green />
+        <Card t="Sponsor amount received" v={money(p.sponsorAmount)} />
+        <Card t="Total expenses" v={money(p.expense)} />
+        <Card t="Auction amount received" v={money(p.auctionAmount)} />
+        <Card t="Closing balance" v={money(p.balance)} green />
       </div>
+      <article className="panel balanceSummary" aria-label="Closing balance calculation">
+        <div>
+          <h2>Closing balance calculation</h2>
+          <p>Opening balance + donations + sponsor amount + auction amount − total expenditure</p>
+        </div>
+        <div className="balanceFormula">
+          <span>{money(p.opening)}</span>
+          <i>+</i>
+          <span>{money(p.income)}</span>
+          <i>+</i>
+          <span>{money(p.sponsorAmount)}</span>
+          <i>+</i>
+          <span>{money(p.auctionAmount)}</span>
+          <i>−</i>
+          <span>{money(p.expense)}</span>
+          <i>=</i>
+          <b>{money(p.balance)}</b>
+        </div>
+      </article>
       <div className="grid">
         <article className="panel">
           <div className="row">

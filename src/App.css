@@ -156,6 +156,9 @@ header > div:last-child {
 .summaryCards {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
+.dashboardSummaryCards {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
 .card,
 .panel,
 .settings {
@@ -174,6 +177,44 @@ header > div:last-child {
 }
 .card.green p {
   color: #f5ddd4;
+}
+.balanceSummary {
+  align-items: center;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.balanceSummary p {
+  color: #718078;
+  font-size: 12px;
+  margin-top: 6px;
+}
+.balanceFormula {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.balanceFormula span,
+.balanceFormula b {
+  background: #f7f1ee;
+  border: 1px solid #eadbd4;
+  border-radius: 6px;
+  padding: 8px 10px;
+  white-space: nowrap;
+}
+.balanceFormula i {
+  color: #7b2d26;
+  font-size: 17px;
+  font-style: normal;
+  font-weight: 700;
+}
+.balanceFormula b {
+  background: #7b2d26;
+  border-color: #7b2d26;
+  color: white;
 }
 .grid {
   display: grid;
@@ -628,6 +669,13 @@ th {
   }
   .cards {
     grid-template-columns: 1fr 1fr;
+  }
+  .balanceSummary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .balanceFormula {
+    justify-content: flex-start;
   }
   .grid {
     grid-template-columns: 1fr;
