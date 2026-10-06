@@ -110,7 +110,7 @@ const today = (() => {
   const day = String(now.getDate()).padStart(2, "0");
   return `${now.getFullYear()}-${month}-${day}`;
 })();
-const donationTypes = ["Donation", "Annaprasadam", "Pooja", "Homam"];
+const donationTypes = ["Donation", "Annaprasadam", "Pooja", "Homam", "Hundi"];
 const cats = [
   "Decoration",
   "Ganesh Idol",
