@@ -348,6 +348,37 @@ function FundManager({ session }: { session: Session }) {
     expenses.filter((item) => searchRow(item, expenseSearch)),
     expenseSort,
   );
+  const expensesByCategory = new Map<
+    string,
+    { category: string; count: number; upi: number; cash: number; total: number }
+  >();
+  for (const item of visibleExpenses) {
+    if (item.status !== "ACTIVE") continue;
+    const group = expensesByCategory.get(item.categoryId) ?? {
+      category: item.category,
+      count: 0,
+      upi: 0,
+      cash: 0,
+      total: 0,
+    };
+    group.count += 1;
+    group.total += item.amount;
+    if (item.mode === "UPI") group.upi += item.amount;
+    if (item.mode === "CASH") group.cash += item.amount;
+    expensesByCategory.set(item.categoryId, group);
+  }
+  const categoryExpenseRows = [...expensesByCategory.values()].sort((a, b) =>
+    a.category.localeCompare(b.category),
+  );
+  const categoryExpenseTotals = categoryExpenseRows.reduce(
+    (totals, row) => ({
+      count: totals.count + row.count,
+      upi: totals.upi + row.upi,
+      cash: totals.cash + row.cash,
+      total: totals.total + row.total,
+    }),
+    { count: 0, upi: 0, cash: 0, total: 0 },
+  );
   const toggleSort = (
     setSort: React.Dispatch<React.SetStateAction<SortState | null>>,
     key: string,
@@ -1584,6 +1615,34 @@ function FundManager({ session }: { session: Session }) {
               onChange={setExpenseSearch}
               placeholder="Search expenses"
             />
+            <h3>Expenses by category</h3>
+            <p>Active expenses matching your search. Voided expenses are excluded.</p>
+            <Table headers={["Category", "Expenses", "UPI", "Cash", "Total"]}>
+              <>
+                {categoryExpenseRows.map((row) => (
+                  <tr key={row.category}>
+                    <td>{row.category}</td>
+                    <td>{row.count}</td>
+                    <td>{money(row.upi)}</td>
+                    <td>{money(row.cash)}</td>
+                    <td><b>{money(row.total)}</b></td>
+                  </tr>
+                ))}
+                {!categoryExpenseRows.length && (
+                  <tr><td colSpan={5}>No active expenses match your search.</td></tr>
+                )}
+                {categoryExpenseRows.length > 0 && (
+                  <tr>
+                    <td><b>Total</b></td>
+                    <td><b>{categoryExpenseTotals.count}</b></td>
+                    <td><b>{money(categoryExpenseTotals.upi)}</b></td>
+                    <td><b>{money(categoryExpenseTotals.cash)}</b></td>
+                    <td><b>{money(categoryExpenseTotals.total)}</b></td>
+                  </tr>
+                )}
+              </>
+            </Table>
+            <h3>Expense details</h3>
             <Table
               headers={[
                 { label: "Expense No.", sortKey: "number" },
