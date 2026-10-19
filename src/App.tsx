@@ -655,6 +655,29 @@ function FundManager({ session }: { session: Session }) {
     const activeExpenses = expenses
       .filter((item) => item.status === "ACTIVE")
       .sort((a, b) => a.date.localeCompare(b.date) || a.number.localeCompare(b.number));
+    const categoryGroups = new Map<
+      string,
+      { category: string; count: number; upi: number; cash: number; total: number }
+    >();
+    for (const item of activeExpenses) {
+      const group = categoryGroups.get(item.categoryId) ?? {
+        category: item.category, count: 0, upi: 0, cash: 0, total: 0,
+      };
+      group.count += 1;
+      group.total += item.amount;
+      if (item.mode === "UPI") group.upi += item.amount;
+      if (item.mode === "CASH") group.cash += item.amount;
+      categoryGroups.set(item.categoryId, group);
+    }
+    const categoryRows = [...categoryGroups.values()]
+      .sort((a, b) => a.category.localeCompare(b.category))
+      .map((row) => `<tr>
+        <td>${escapeHtml(row.category)}</td><td>${row.count}</td>
+        <td class="amount">${escapeHtml(money(row.upi))}</td>
+        <td class="amount">${escapeHtml(money(row.cash))}</td>
+        <td class="amount"><b>${escapeHtml(money(row.total))}</b></td>
+      </tr>`)
+      .join("");
     const imageExpenses = includeBills
       ? activeExpenses.filter((item) => item.attachmentPath && isImageAttachment(item.attachmentPath))
       : [];
@@ -808,6 +831,10 @@ function FundManager({ session }: { session: Session }) {
       <h2>Sponsors</h2>
       <table><thead><tr><th>S. No.</th><th>Date</th><th>Flat No.</th><th>Resident</th><th>Sponsor For</th><th>Amount</th></tr></thead>
       <tbody>${sponsorRows || '<tr><td colspan="6">No sponsors have been added.</td></tr>'}</tbody></table>
+      <h2>Expenses by category</h2>
+      <table><thead><tr><th>Category</th><th>Expenses</th><th>UPI</th><th>Cash</th><th>Total</th></tr></thead>
+      <tbody>${categoryRows || '<tr><td colspan="5">No active expenses recorded.</td></tr>'}
+      ${activeExpenses.length ? `<tr><td><b>Total</b></td><td><b>${activeExpenses.length}</b></td><td class="amount"><b>${escapeHtml(money(expenseUpi))}</b></td><td class="amount"><b>${escapeHtml(money(expenseCash))}</b></td><td class="amount"><b>${escapeHtml(money(expense))}</b></td></tr>` : ""}</tbody></table>
       <h2>Expenses (Date: ascending)</h2>
       <table><thead><tr><th>Expense No.</th><th>Date</th><th>Category</th><th>Description</th><th>Paid to</th><th>Amount</th><th>Mode</th><th>Bill</th></tr></thead>
       <tbody>${expenseRows || '<tr><td colspan="8">No active expenses recorded.</td></tr>'}</tbody></table>
